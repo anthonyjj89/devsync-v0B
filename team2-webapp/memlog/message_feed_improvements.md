@@ -1,98 +1,120 @@
-# Message Feed Display Improvements
+# Message Feed Implementation Status
 
-## Message Types Analysis
+## Current Implementation
 
-Based on the sample messages, we need to handle these distinct types:
+### Message Processing (messageProcessor.js)
+- ✅ Role-based message filtering (user, assistant, system)
+- ✅ Basic/Advanced mode toggle support
+- ✅ Proper handling of different message types (text, thinking, api_request, etc.)
+- ✅ Message grouping functionality
+- ✅ JSON content formatting
+- ✅ Tag content extraction
+- ✅ Timestamp handling
 
-### 1. User Messages
-- Keep these simple and clean
-- Display just the text content
-- Right-aligned with user icon
-- Example: "hello there" → Display as is
+### UI Components
+- ✅ MessageList
+  - Message grouping display
+  - Scroll behavior
+  - Basic/Advanced mode support
+  
+- ✅ MessageBubble
+  - Role-specific styling and icons
+  - Different message type displays
+  - Timestamp handling
+  - JSON content collapsing
+  - Error states
 
-### 2. System Thinking Messages
-- Extract content from <thinking> tags
-- Display with subtle styling
-- Use italics or different background
-- Example: Convert `<thinking>Since this is an initial greeting...</thinking>` to properly formatted text
+### Data Flow
+- ✅ FileWatcher service for monitoring updates
+- ✅ Message processing pipeline
+- ✅ Error handling and logging
+- ✅ Debug panel for monitoring
 
-### 3. Tool Requests
-For messages like:
-```json
-{
-  "tool": "ask_followup_question",
-  "question": "What would you like to test?",
-  ...
-}
-```
-- Extract and display only relevant information
-- For ask_followup_question: Show just the question
-- For other tools: Show a concise summary of the action
+## Recent Updates
 
-### 4. API Requests
-For messages like:
-```json
-{
-  "request": {
-    "model": "claude-3-5-sonnet-20240620",
-    ...
-  }
-}
-```
-- Hide technical details by default
-- Add expandable/collapsible option for developers
-- Show simplified status indicator
+### Role Determination Fix (2024-01-19)
+Fixed issue where all messages were showing as Kodu (assistant) by implementing better role determination:
 
-### 5. Tool Responses
-For content within toolResponse tags:
-- Extract the actual response message
-- Remove XML-style tags
-- Show clear success/error status
-- Format based on tool type
+1. Centralized Role Processing
+   - Removed duplicate role determination in App.jsx
+   - Now using messageProcessor.js as single source of truth for roles
+   - Added extensive debug logging for role determination
 
-### 6. Error Messages
-For messages with error states:
-- Clear error highlighting
-- Show error message prominently
-- Include error details if available
-- Add retry/resolution options if applicable
+2. Role Detection Logic
+   ```javascript
+   // In messageProcessor.js
+   const role = text.includes('user_feedback') ? 'user' : 'assistant';
+   ```
 
-## Display Guidelines
+3. Message Processing Flow
+   ```javascript
+   // In App.jsx
+   const processedContent = processMessageContent(messageText, advancedMode);
+   return {
+     ...msg,
+     text: processedContent.content,
+     type: processedContent.type,
+     role: processedContent.role, // Using processed role directly
+     metadata: {
+       ...processedContent.metadata,
+       original: msg.content || msg.text,
+       source: type,
+       processedRole: processedContent.role // For debugging
+     }
+   };
+   ```
 
-1. Message Grouping:
-   - Group related messages (request/response pairs)
-   - Show timestamps only for group starts
-   - Use indentation or connecting lines for related messages
+4. Debug Improvements
+   - Added role determination logging
+   - Tracking processed roles in metadata
+   - Logging message source and type
 
-2. Content Cleaning:
-   - Remove technical tags (<thinking>, <toolResponse>, etc.)
-   - Parse and format JSON content
-   - Extract meaningful text from structured data
+## Role Detection Rules
 
-3. Visual Hierarchy:
-   - Primary: User and assistant messages
-   - Secondary: System status and thinking messages
-   - Tertiary: Technical details (expandable)
+1. User Messages:
+   - Messages containing 'user_feedback'
+   - Messages with type 'say' and say='user_feedback'
+   - Messages with explicit role='user'
 
-4. Styling:
-   - User messages: Blue background, right-aligned
-   - Assistant messages: Gray background, left-aligned
-   - System messages: Light background, full width
-   - Tool messages: Purple accent, structured layout
-   - Error messages: Red accent, prominent display
+2. System Messages:
+   - Messages with type 'say' and say='api_req_started'
+   - Tool responses in advanced mode
+   - Messages with explicit role='system'
 
-5. Interactive Elements:
-   - Expandable technical details
-   - Copy button for code or commands
-   - Error resolution options
-   - Message timestamp hovers
+3. Assistant Messages:
+   - Messages with type 'say' and say='text'
+   - Thinking messages
+   - Tool messages
+   - Default fallback for unmatched messages
 
-## Implementation Priority
+## Recommendations for Future Improvements
 
-1. Basic message cleaning and formatting
-2. Message type-specific displays
-3. Grouping and visual hierarchy
-4. Interactive elements
-5. Error handling improvements
+1. Message Search & Filtering
+   - Add search functionality for message content
+   - Filter by message type or role
+   - Date/time range filtering
 
-This approach will transform the current raw JSON and tag-heavy display into a clean, user-friendly chat interface while maintaining all necessary information in an accessible format.
+2. Message Export
+   - Export conversation history
+   - Support multiple export formats (JSON, TXT, HTML)
+
+3. Enhanced Visualization
+   - Thread visualization for related messages
+   - Message statistics and analytics
+   - Timeline view option
+
+4. User Experience
+   - Message reactions/feedback
+   - Bookmarking important messages
+   - Custom theme support for different message types
+
+5. Performance Optimizations
+   - Message virtualization for large conversations
+   - Lazy loading of message content
+   - Optimized message processing for large datasets
+
+6. Role Detection Improvements
+   - Add more robust role detection patterns
+   - Support for custom role types
+   - Role validation and error handling
+   - Role-based message grouping options

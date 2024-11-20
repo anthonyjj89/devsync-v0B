@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageBubble';
@@ -18,6 +18,36 @@ const ROLE_CONFIG = {
     icon: '⚙️',
     name: 'System'
   }
+};
+
+const JsonContent = ({ content }) => {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  
+  return (
+    <div className="font-mono text-xs">
+      <button 
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="text-blue-600 hover:text-blue-800 mb-1 flex items-center gap-1"
+      >
+        <span>{isCollapsed ? '▶' : '▼'}</span>
+        <span>{isCollapsed ? 'Show Details' : 'Hide Details'}</span>
+      </button>
+      {!isCollapsed && (
+        <pre className="whitespace-pre-wrap overflow-x-auto">
+          {content}
+        </pre>
+      )}
+      {isCollapsed && (
+        <div className="text-gray-500 italic">
+          Click to view API details
+        </div>
+      )}
+    </div>
+  );
+};
+
+JsonContent.propTypes = {
+  content: PropTypes.string.isRequired
 };
 
 const MessageBubble = ({ 
@@ -85,7 +115,10 @@ const MessageBubble = ({
         baseClasses.push('bg-gray-50', 'text-gray-700', 'italic', 'border', 'border-gray-200', 'max-w-full');
         break;
       case 'api_request':
-        baseClasses.push('font-mono', 'text-xs', 'bg-gray-50', 'border', 'border-gray-200');
+        baseClasses.push('bg-gray-50', 'border', 'border-gray-200', 'max-w-full');
+        if (metadata?.isApiRequest || metadata?.isToolRequest) {
+          baseClasses.push('hover:border-blue-300', 'transition-colors');
+        }
         break;
       case 'tool_response':
         baseClasses.push('bg-green-50', 'text-green-900', 'border', 'border-green-200');
@@ -120,6 +153,21 @@ const MessageBubble = ({
           </div>
           {text && <div>{text}</div>}
         </>
+      );
+    }
+
+    // Handle API requests and JSON content
+    if (type === 'api_request' && (metadata?.isApiRequest || metadata?.isToolRequest)) {
+      return <JsonContent content={text} />;
+    }
+
+    // Handle thinking content
+    if (type === 'thinking') {
+      return (
+        <div className="flex items-center gap-2">
+          <span className="animate-pulse">💭</span>
+          <span>{text}</span>
+        </div>
       );
     }
 

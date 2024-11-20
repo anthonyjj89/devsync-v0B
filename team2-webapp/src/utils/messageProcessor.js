@@ -3,6 +3,18 @@ import { debugLogger, DEBUG_LEVELS } from './debug';
 const COMPONENT = 'MessageProcessor';
 
 /**
+ * Formats JSON content for display
+ */
+const formatJsonContent = (jsonStr) => {
+  try {
+    const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+    return JSON.stringify(obj, null, 2);
+  } catch (e) {
+    return jsonStr;
+  }
+};
+
+/**
  * Extracts content from XML-style tags
  */
 const extractTagContent = (text, tagName) => {
@@ -12,12 +24,69 @@ const extractTagContent = (text, tagName) => {
 };
 
 /**
+ * Determines the role of a message based on its content and type
+ */
+const determineMessageRole = (message) => {
+  debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Determining message role', message);
+
+  // Use explicit role if present
+  if (message.role) {
+    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Using explicit role', { role: message.role });
+    return message.role;
+  }
+
+  // Handle array content
+  if (Array.isArray(message.content)) {
+    for (const item of message.content) {
+      if (item.type === 'text' && item.text) {
+        if (item.text.includes('user_feedback')) {
+          return 'user';
+        }
+      }
+    }
+  }
+
+  // Handle string content
+  if (typeof message.content === 'string' && message.content.includes('user_feedback')) {
+    return 'user';
+  }
+
+  // Handle legacy format
+  if (message.type === 'say' && message.say === 'user_feedback') {
+    return 'user';
+  }
+
+  return 'assistant'; // Default role
+};
+
+/**
  * Processes JSON content based on message type
  */
 const processJsonContent = (jsonContent, advancedMode = false) => {
   try {
+    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing JSON content', {
+      content: jsonContent,
+      advancedMode
+    });
+
+    // Handle array content
+    if (Array.isArray(jsonContent.content)) {
+      const textContent = jsonContent.content
+        .filter(item => item.type === 'text')
+        .map(item => item.text)
+        .join('\n');
+
+      return {
+        type: 'text',
+        content: textContent,
+        metadata: { original: jsonContent },
+        role: determineMessageRole(jsonContent)
+      };
+    }
+
     // Handle user feedback - always show in both modes
     if (jsonContent.type === 'say' && jsonContent.say === 'user_feedback') {
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing user feedback message');
       return {
         type: 'text',
         content: jsonContent.text,
@@ -29,7 +98,6 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
     // Handle AI tool messages
     if (jsonContent.type === 'ask' && jsonContent.ask === 'tool') {
       try {
-        // Parse the text field as JSON to extract the question
         const toolData = JSON.parse(jsonContent.text);
         if (toolData.tool === 'ask_followup_question') {
           return {
@@ -37,6 +105,19 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
             content: toolData.question,
             metadata: { tool: 'ask_followup_question' },
             role: 'assistant'
+          };
+        }
+        
+        // In advanced mode, show the full tool request
+        if (advancedMode) {
+          return {
+            type: 'api_request',
+            content: formatJsonContent(toolData),
+            metadata: { 
+              tool: toolData.tool,
+              isToolRequest: true 
+            },
+            role: 'system'
           };
         }
       } catch (e) {
@@ -47,18 +128,32 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
       }
     }
 
-    // In basic mode, skip all other message types
+    // In basic mode, skip all other message types except direct AI/user communication
     if (!advancedMode) {
+      if (jsonContent.type === 'say' && 
+          jsonContent.say === 'text' && 
+          !jsonContent.text?.includes('<thinking>')) {
+        const role = determineMessageRole(jsonContent);
+        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode message processed', { role });
+        return {
+          type: 'text',
+          content: jsonContent.text,
+          metadata: { original: jsonContent },
+          role
+        };
+      }
       return null;
     }
 
-    // Advanced mode: Handle API requests
+    // Advanced mode: Handle API requests with formatted JSON
     if (jsonContent.type === 'say' && jsonContent.say === 'api_req_started') {
+      const requestData = JSON.parse(jsonContent.text);
       return {
         type: 'api_request',
-        content: 'API Request',
+        content: formatJsonContent(requestData),
         metadata: {
-          request: JSON.parse(jsonContent.text)
+          request: requestData,
+          isApiRequest: true
         },
         role: 'system'
       };
@@ -67,7 +162,7 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
     // Advanced mode: Handle thinking messages
     if (jsonContent.type === 'say' && 
         jsonContent.say === 'text' && 
-        jsonContent.text.includes('<thinking>')) {
+        jsonContent.text?.includes('<thinking>')) {
       const thinkingContent = extractTagContent(jsonContent.text, 'thinking');
       if (thinkingContent) {
         return {
@@ -81,11 +176,13 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
 
     // Advanced mode: Handle other messages
     if (jsonContent.text) {
+      const role = determineMessageRole(jsonContent);
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Advanced mode message processed', { role });
       return {
         type: 'system',
         content: jsonContent.text,
         metadata: { raw: jsonContent },
-        role: 'system'
+        role
       };
     }
 
@@ -102,21 +199,50 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
 /**
  * Cleans and processes message text
  */
-export const processMessageContent = (text, advancedMode = false) => {
-  if (!text) return null;
+export const processMessageContent = (message, advancedMode = false) => {
+  if (!message) return null;
+
+  debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message content', {
+    message,
+    advancedMode
+  });
 
   try {
-    // Try parsing as JSON first
-    try {
-      const jsonContent = JSON.parse(text);
-      return processJsonContent(jsonContent, advancedMode);
-    } catch {
-      // Not JSON, continue with text processing
+    // Handle message object with content array
+    if (message.content && Array.isArray(message.content)) {
+      return {
+        type: 'text',
+        content: message.content
+          .filter(item => item.type === 'text')
+          .map(item => item.text)
+          .join('\n'),
+        metadata: { original: message },
+        role: determineMessageRole(message)
+      };
     }
+
+    // Try parsing as JSON if it's a string
+    if (typeof message === 'string') {
+      try {
+        const jsonContent = JSON.parse(message);
+        return processJsonContent(jsonContent, advancedMode);
+      } catch {
+        // Not JSON, continue with text processing
+      }
+    }
+
+    // Handle message object directly
+    if (typeof message === 'object') {
+      return processJsonContent(message, advancedMode);
+    }
+
+    // Handle plain text
+    const text = String(message);
+    if (!text.trim()) return null;
 
     // In basic mode, only show clean text without any tags
     if (!advancedMode) {
-      // Remove all system tags
+      // Remove all system tags and keep only conversational content
       const cleanedText = text
         .replace(/<environment_details>.*?<\/environment_details>/s, '')
         .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
@@ -126,17 +252,19 @@ export const processMessageContent = (text, advancedMode = false) => {
         .trim();
 
       if (cleanedText) {
+        const role = text.includes('user_feedback') ? 'user' : 'assistant';
+        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode text processed', { role });
         return {
           type: 'text',
           content: cleanedText,
           metadata: { original: text },
-          role: 'assistant'
+          role
         };
       }
       return null;
     }
 
-    // Advanced mode: Process all message types
+    // Advanced mode: Process all message types with detailed formatting
     const thinkingContent = extractTagContent(text, 'thinking');
     if (thinkingContent) {
       return {
@@ -168,11 +296,13 @@ export const processMessageContent = (text, advancedMode = false) => {
       .trim();
 
     if (cleanedText) {
+      const role = text.includes('user_feedback') ? 'user' : 'assistant';
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Advanced mode text processed', { role });
       return {
         type: 'text',
         content: cleanedText,
         metadata: { original: text },
-        role: 'assistant'
+        role
       };
     }
 
@@ -180,7 +310,7 @@ export const processMessageContent = (text, advancedMode = false) => {
   } catch (error) {
     debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error processing message content', {
       error: error.message,
-      text
+      message
     });
     return null;
   }

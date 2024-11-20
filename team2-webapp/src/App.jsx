@@ -6,6 +6,7 @@ import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
+import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
 
 const COMPONENT = 'App';
@@ -16,7 +17,7 @@ function App() {
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [showRawMessages, setShowRawMessages] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
   const [showMessageSettings, setShowMessageSettings] = useState(false);
   const [monitoringConfig, setMonitoringConfig] = useState(() => {
     const koduPath = localStorage.getItem('koduAI.path');
@@ -48,51 +49,6 @@ function App() {
     });
   }, []);
 
-  const extractTextFromTags = (text, tagName) => {
-    const regex = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 's');
-    const match = regex.exec(text);
-    return match ? match[1].trim() : '';
-  };
-
-  const cleanMessage = (text, role) => {
-    if (!text) return '';
-
-    // For user messages, just return the clean text
-    if (role === 'user') {
-      return text.replace(/<[^>]+>/g, '').trim();
-    }
-
-    // For AI messages, extract specific content from tags
-    const taskContent = extractTextFromTags(text, 'task');
-    const answerContent = extractTextFromTags(text, 'answer');
-    const toolContent = extractTextFromTags(text, 'tool');
-    const thinkingContent = extractTextFromTags(text, 'thinking');
-
-    // If any specific content was found, use that
-    if (taskContent || answerContent || toolContent || thinkingContent) {
-      return [taskContent, answerContent, toolContent, thinkingContent]
-        .filter(Boolean)
-        .join('\n');
-    }
-
-    // Otherwise, clean up the text by removing system tags and metadata
-    return text
-      .replace(/<environment_details>.*?<\/environment_details>/gs, '')
-      .replace(/<most_important_context>.*?<\/most_important_context>/gs, '')
-      .replace(/<toolResponse>.*?<\/toolResponse>/gs, '')
-      .replace(/<tool_name>.*?<\/tool_name>/gs, '')
-      .replace(/<parameter\d*_name>.*?<\/parameter\d*_name>/gs, '')
-      .replace(/<path>.*?<\/path>/gs, '')
-      .replace(/<command>.*?<\/command>/gs, '')
-      .replace(/<content>.*?<\/content>/gs, '')
-      .replace(/<question>.*?<\/question>/gs, '')
-      .replace(/<result>.*?<\/result>/gs, '')
-      .replace(/\{[^}]+\}/g, '') // Remove JSON-like structures
-      .replace(/<[^>]+>/g, '') // Remove any remaining XML-like tags
-      .replace(/^\s*\n/gm, '') // Remove empty lines
-      .trim();
-  };
-
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing App');
 
@@ -104,39 +60,39 @@ function App() {
         addDebugLog(`Received ${type} messages update`, data);
         setLastUpdated(new Date());
         
-        // Process messages while preserving their roles and content
+        // Process messages using our enhanced processor
         const processedData = data?.map(msg => {
-          // Store raw message content
-          const rawContent = Array.isArray(msg.content) 
-            ? msg.content.map(item => item.text).join('\n')
-            : msg.content;
+          // Pass the entire message object to processMessageContent
+          const processedContent = processMessageContent(msg, advancedMode);
+          if (!processedContent) return null;
 
-          const role = msg.role || 'assistant';
-
-          // Extract filtered text from content array if present
-          let filteredText = '';
-          if (Array.isArray(msg.content)) {
-            filteredText = msg.content
-              .filter(item => item.type === 'text')
-              .map(item => cleanMessage(item.text, role))
-              .filter(Boolean)
-              .join('\n');
-          } else if (typeof msg.content === 'string') {
-            filteredText = cleanMessage(msg.content, role);
-          }
+          // Log the message processing for debugging
+          debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message', {
+            originalMessage: msg,
+            processedContent,
+            messageType: type
+          });
 
           return {
             ...msg,
-            rawContent,
-            text: filteredText || msg.text || '',
-            role,
+            text: processedContent.content,
+            type: processedContent.type,
+            role: processedContent.role,
+            metadata: {
+              ...processedContent.metadata,
+              source: type,
+              processedRole: processedContent.role // For debugging
+            },
             timestamp: msg.ts || Date.now()
           };
-        }) || [];
+        }).filter(Boolean) || [];
         
         if (type === 'claude') {
           setMessages(processedData);
-          addDebugLog('Updated messages', processedData);
+          addDebugLog('Updated messages', {
+            count: processedData.length,
+            roles: processedData.map(msg => msg.role)
+          });
         }
         
         setError('');
@@ -144,7 +100,8 @@ function App() {
         const duration = debugLogger.endTimer(updateId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${type} messages update completed`, {
           messageCount: processedData.length,
-          durationMs: duration
+          durationMs: duration,
+          roles: processedData.map(msg => msg.role)
         });
       } catch (err) {
         const errorMsg = `Error processing ${type} messages: ${err.message}`;
@@ -164,7 +121,7 @@ function App() {
         watcher.stop();
       }
     };
-  }, [addDebugLog, monitoringConfig]);
+  }, [addDebugLog, monitoringConfig, advancedMode]);
 
   const initializeWatcher = async (watcher, config) => {
     try {
@@ -302,11 +259,11 @@ function App() {
                         <label className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={showRawMessages}
-                            onChange={() => setShowRawMessages(!showRawMessages)}
+                            checked={advancedMode}
+                            onChange={() => setAdvancedMode(!advancedMode)}
                             className="mr-2"
                           />
-                          Show Raw Messages
+                          Advanced Mode
                         </label>
                       </div>
                     )}
@@ -314,8 +271,8 @@ function App() {
                 </div>
                 <div className="flex-1 min-h-0">
                   <MessageList 
-                    messages={messages} 
-                    showRawContent={showRawMessages}
+                    messages={messages}
+                    advancedMode={advancedMode}
                   />
                 </div>
               </div>
@@ -339,7 +296,8 @@ function App() {
     messagesCount: messages.length,
     debugLogsCount: debugLogs.length,
     activeTab,
-    monitoringConfig
+    monitoringConfig,
+    advancedMode
   });
 
   return (
