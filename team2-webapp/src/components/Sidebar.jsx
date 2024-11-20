@@ -98,7 +98,7 @@ const Sidebar = ({ activeTab, onTabChange }) => {
 
       {!collapsed && (
         <div className="p-4 text-xs text-gray-400 border-t border-gray-700">
-          DevSync v0.1
+          DevSync v0.2.0
         </div>
       )}
     </div>
