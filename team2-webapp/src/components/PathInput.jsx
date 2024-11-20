@@ -21,7 +21,6 @@ const PathInput = ({ onPathValidated }) => {
     setIsValidating(true);
 
     try {
-      // Call the validation callback
       await onPathValidated(path);
       
       const duration = debugLogger.endTimer(validationId, COMPONENT);
@@ -48,52 +47,51 @@ const PathInput = ({ onPathValidated }) => {
     setPath(newPath);
   }, [path]);
 
-  const containerStyle = {
-    marginBottom: '20px'
-  };
-
-  const formStyle = {
-    display: 'flex',
-    gap: '10px'
-  };
-
-  const inputStyle = {
-    flex: 1,
-    padding: '8px 12px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-    fontSize: '14px'
-  };
-
-  const buttonStyle = {
-    padding: '8px 16px',
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: isValidating ? 'wait' : 'pointer',
-    opacity: isValidating ? 0.7 : 1
-  };
-
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering PathInput', {
     currentPath: path,
     isValidating
   });
 
   return (
-    <div style={containerStyle}>
-      <form onSubmit={handleSubmit} style={formStyle}>
+    <div className="mb-5">
+      <form onSubmit={handleSubmit} className="flex gap-3">
         <input
           type="text"
           value={path}
           onChange={handlePathChange}
           placeholder="Enter path to JSON files"
-          style={inputStyle}
+          className={`
+            flex-1
+            px-4 
+            py-2 
+            rounded-md 
+            border 
+            border-gray-300
+            text-sm
+            focus:outline-none
+            focus:ring-2
+            focus:ring-blue-500
+            focus:border-transparent
+            disabled:bg-gray-100
+            disabled:cursor-not-allowed
+          `}
           disabled={isValidating}
         />
         <button 
           type="submit" 
-          style={buttonStyle}
+          className={`
+            px-4 
+            py-2 
+            rounded-md 
+            bg-blue-500 
+            text-white
+            text-sm
+            font-medium
+            transition-colors
+            ${isValidating || !path.trim() 
+              ? 'opacity-70 cursor-not-allowed' 
+              : 'hover:bg-blue-600'}
+          `}
           disabled={isValidating || !path.trim()}
         >
           {isValidating ? 'Validating...' : 'Monitor Path'}

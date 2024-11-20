@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import FileWatcher from './services/fileWatcher';
 import MessageList from './components/MessageList';
 import PathInput from './components/PathInput';
+import DevManagerDashboard from './components/DevManagerDashboard';
+import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import './App.css';
 
@@ -9,6 +11,12 @@ const COMPONENT = 'App';
 
 // Default path for monitoring VSCode extension files
 const DEFAULT_PATH = 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks/1732044487428';
+
+const ROLES = {
+  DEFAULT: 'default',
+  DEV_MANAGER: 'dev_manager',
+  PROJECT_OWNER: 'project_owner'
+};
 
 function App() {
   const [claudeMessages, setClaudeMessages] = useState([]);
@@ -19,6 +27,7 @@ function App() {
   const [error, setError] = useState('');
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
+  const [currentRole, setCurrentRole] = useState(ROLES.DEFAULT);
 
   const addDebugLog = useCallback((message, data = null) => {
     const logEntry = {
@@ -32,7 +41,6 @@ function App() {
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, logEntry.message, data);
     
     setDebugLogs(prev => {
-      // Limit debug logs to last 50 entries
       const updatedLogs = [...prev, logEntry];
       return updatedLogs.slice(-50);
     });
@@ -56,7 +64,6 @@ function App() {
           addDebugLog('Updated api messages', data);
         }
         
-        // Clear any existing errors when successful update occurs
         setError('');
 
         const duration = debugLogger.endTimer(updateId, COMPONENT);
@@ -73,8 +80,6 @@ function App() {
     });
 
     setFileWatcher(watcher);
-
-    // Initialize with default path
     initializeWatcher(watcher, DEFAULT_PATH);
 
     return () => {
@@ -87,11 +92,8 @@ function App() {
   const initializeWatcher = async (watcher, path) => {
     try {
       addDebugLog('Starting monitoring for path:', path);
-      
-      // Validate and start monitoring path
       await watcher.setBasePath(path).validatePath();
-      await watcher.start(); // Now waiting for start to complete
-      
+      await watcher.start();
       setIsMonitoring(true);
       setMonitoringPath(path);
       addDebugLog('Successfully started monitoring path:', path);
@@ -108,12 +110,10 @@ function App() {
   const handlePathValidated = async (path) => {
     if (fileWatcher) {
       try {
-        // Stop any existing monitoring
         fileWatcher.stop();
         setClaudeMessages([]);
         setApiMessages([]);
         setError('');
-        
         await initializeWatcher(fileWatcher, path);
       } catch (err) {
         const errorMsg = `Failed to start monitoring: ${err.message}`;
@@ -126,63 +126,30 @@ function App() {
     }
   };
 
-  const containerStyle = {
-    padding: '20px',
-    backgroundColor: '#f0f2f5',
-    minHeight: '100vh',
-  };
-
-  const contentStyle = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
-    height: showDebug ? 'calc(100vh - 400px)' : 'calc(100vh - 200px)',
-  };
-
-  const columnStyle = {
-    backgroundColor: 'white',
-    borderRadius: '10px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const headerStyle = {
-    padding: '15px',
-    borderBottom: '1px solid #e0e0e0',
-    fontWeight: 'bold',
-    backgroundColor: '#f8f9fa',
-  };
-
-  const statusStyle = {
-    textAlign: 'center',
-    padding: '10px',
-    backgroundColor: '#f8f9fa',
-    borderBottom: '1px solid #e0e0e0',
-    color: error ? '#dc3545' : (isMonitoring ? '#28a745' : '#6c757d'),
-  };
-
-  const debugPanelStyle = {
-    backgroundColor: '#1e1e1e',
-    color: '#fff',
-    padding: '10px',
-    height: '200px',
-    overflowY: 'auto',
-    fontFamily: 'monospace',
-    fontSize: '12px',
-    marginTop: '20px',
-    borderRadius: '10px',
-  };
-
-  const debugButtonStyle = {
-    padding: '8px 16px',
-    backgroundColor: showDebug ? '#dc3545' : '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    marginTop: '10px',
+  const renderContent = () => {
+    switch (currentRole) {
+      case ROLES.DEV_MANAGER:
+        return <DevManagerDashboard messages={claudeMessages} />;
+      case ROLES.PROJECT_OWNER:
+        return <ProjectOwnerDashboard messages={claudeMessages} />;
+      default:
+        return (
+          <div className="grid grid-cols-2 gap-5 h-[calc(100vh-200px)]">
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+              <div className="p-4 border-b bg-gray-50 font-bold">
+                Claude Messages ({claudeMessages.length})
+              </div>
+              <MessageList messages={claudeMessages} type="claude" />
+            </div>
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+              <div className="p-4 border-b bg-gray-50 font-bold">
+                API Messages ({apiMessages.length})
+              </div>
+              <MessageList messages={apiMessages} type="api" />
+            </div>
+          </div>
+        );
+    }
   };
 
   const statusText = error 
@@ -200,31 +167,53 @@ function App() {
   });
 
   return (
-    <div style={containerStyle}>
+    <div className="min-h-screen bg-gray-100 p-5">
+      {/* Role Selector */}
+      <div className="mb-4 flex gap-2">
+        {Object.values(ROLES).map(role => (
+          <button
+            key={role}
+            onClick={() => setCurrentRole(role)}
+            className={`px-4 py-2 rounded-md ${
+              currentRole === role
+                ? 'bg-blue-500 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {role.replace('_', ' ').toUpperCase()}
+          </button>
+        ))}
+      </div>
+
       <PathInput onPathValidated={handlePathValidated} />
-      <div style={statusStyle}>{statusText}</div>
+      
+      <div className={`text-center p-3 mb-4 rounded-md ${
+        error 
+          ? 'bg-red-100 text-red-700' 
+          : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
+      }`}>
+        {statusText}
+      </div>
+
       <button 
-        style={debugButtonStyle}
         onClick={() => setShowDebug(!showDebug)}
+        className={`mb-4 px-4 py-2 rounded-md ${
+          showDebug ? 'bg-red-500' : 'bg-green-500'
+        } text-white`}
       >
         {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
       </button>
-      <div style={contentStyle}>
-        <div style={columnStyle}>
-          <div style={headerStyle}>Claude Messages ({claudeMessages.length})</div>
-          <MessageList messages={claudeMessages} type="claude" />
-        </div>
-        <div style={columnStyle}>
-          <div style={headerStyle}>API Messages ({apiMessages.length})</div>
-          <MessageList messages={apiMessages} type="api" />
-        </div>
-      </div>
+
+      {renderContent()}
+
       {showDebug && (
-        <div style={debugPanelStyle}>
+        <div className="mt-5 bg-gray-900 text-white p-4 h-48 overflow-y-auto rounded-lg font-mono text-sm">
           {debugLogs.map((log, index) => (
-            <div key={index} style={{ marginBottom: '4px', whiteSpace: 'pre-wrap' }}>
+            <div key={index} className="mb-1 whitespace-pre-wrap">
               [{log.timestamp}] {log.message}
-              {log.data && <pre style={{fontSize: '10px', color: '#aaa'}}>{log.data}</pre>}
+              {log.data && (
+                <pre className="text-xs text-gray-400">{log.data}</pre>
+              )}
             </div>
           ))}
         </div>

@@ -1,12 +1,19 @@
 import PropTypes from 'prop-types';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageList';
 
 const MessageList = ({ messages = [], type }) => {
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
+    scrollToBottom();
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Rendering ${type} messages`, {
       messageCount: messages.length
     });
@@ -69,40 +76,36 @@ const MessageList = ({ messages = [], type }) => {
   };
 
   return (
-    <div className="message-list" style={{
-      padding: '20px',
-      overflowY: 'auto',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px'
-    }}>
-      {Array.isArray(messages) && messages.length > 0 ? (
-        messages.map((message, index) => {
-          const processedMessage = processMessage(message);
-          if (!processedMessage || !processedMessage.text) return null;
-          
-          debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Rendering message ${index}`, {
-            type,
-            messageIndex: index,
-            messageType: processedMessage.type
-          });
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {Array.isArray(messages) && messages.length > 0 ? (
+          messages.map((message, index) => {
+            const processedMessage = processMessage(message);
+            if (!processedMessage || !processedMessage.text) return null;
+            
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Rendering message ${index}`, {
+              type,
+              messageIndex: index,
+              messageType: processedMessage.type
+            });
 
-          return (
-            <MessageBubble
-              key={index}
-              {...processedMessage}
-            />
-          );
-        })
-      ) : (
-        <div style={{ textAlign: 'center', color: '#666' }}>
-          {(() => {
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'No messages to display', { type });
-            return 'No messages to display';
-          })()}
-        </div>
-      )}
+            return (
+              <MessageBubble
+                key={index}
+                {...processedMessage}
+              />
+            );
+          })
+        ) : (
+          <div className="text-center text-gray-500">
+            {(() => {
+              debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'No messages to display', { type });
+              return 'No messages to display';
+            })()}
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 };

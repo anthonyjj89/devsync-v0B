@@ -43,37 +43,41 @@ const MessageBubble = ({
     }
   }, [timestamp]);
 
-  const bubbleStyle = useMemo(() => {
-    const style = {
-      padding: '10px 15px',
-      borderRadius: '10px',
-      maxWidth: '80%',
-      wordBreak: 'break-word',
-      whiteSpace: 'pre-wrap',
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      alignSelf: type === 'claude' ? 'flex-start' : 'flex-end',
-      backgroundColor: type === 'claude' ? '#f0f0f0' : '#007bff',
-      color: type === 'claude' ? '#000' : '#fff',
-      opacity: isFetching ? 0.7 : 1,
-      border: isError ? '2px solid #dc3545' : 'none'
-    };
+  const bubbleClasses = useMemo(() => {
+    const baseClasses = [
+      'px-4 py-3',
+      'rounded-lg',
+      'max-w-[80%]',
+      'break-words',
+      'whitespace-pre-wrap',
+      'font-mono',
+      'text-sm',
+      'shadow-sm'
+    ];
 
-    if (isSubMessage) {
-      style.marginLeft = '20px';
-      style.fontSize = '12px';
-      style.opacity = 0.8;
+    // Alignment and colors based on message type
+    if (type === 'claude') {
+      baseClasses.push('self-start', 'bg-assistant', 'text-gray-800');
+    } else {
+      baseClasses.push('self-end', 'bg-user', 'text-white');
     }
 
-    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Computed bubble style', {
-      type,
-      isSubMessage,
-      isFetching,
-      isError,
-      style
-    });
+    // Sub-message styling
+    if (isSubMessage) {
+      baseClasses.push('ml-5', 'text-xs', 'opacity-80');
+    }
 
-    return style;
+    // Loading state
+    if (isFetching) {
+      baseClasses.push('opacity-70');
+    }
+
+    // Error state
+    if (isError) {
+      baseClasses.push('border-2', 'border-error');
+    }
+
+    return baseClasses.join(' ');
   }, [type, isSubMessage, isFetching, isError]);
 
   const renderContent = () => {
@@ -86,7 +90,7 @@ const MessageBubble = ({
     if (isError && errorText) {
       return (
         <>
-          <div style={{ color: '#dc3545', marginBottom: '5px' }}>
+          <div className="text-error mb-1">
             Error: {errorText}
           </div>
           {text && <div>{text}</div>}
@@ -97,8 +101,8 @@ const MessageBubble = ({
     if (isFetching) {
       return (
         <>
-          <div style={{ marginBottom: '5px' }}>Loading...</div>
-          {text && <div style={{ opacity: 0.7 }}>{text}</div>}
+          <div className="mb-1">Loading...</div>
+          {text && <div className="opacity-70">{text}</div>}
         </>
       );
     }
@@ -107,18 +111,18 @@ const MessageBubble = ({
   };
 
   return (
-    <div style={{ marginBottom: '10px' }}>
+    <div className="mb-3">
       {timestamp && (
-        <div style={{
-          fontSize: '10px',
-          color: '#666',
-          marginBottom: '2px',
-          textAlign: type === 'claude' ? 'left' : 'right'
-        }}>
+        <div className={`
+          text-xs 
+          text-gray-500 
+          mb-1
+          ${type === 'claude' ? 'text-left' : 'text-right'}
+        `}>
           {formattedTimestamp}
         </div>
       )}
-      <div style={bubbleStyle}>
+      <div className={bubbleClasses}>
         {renderContent()}
       </div>
     </div>
