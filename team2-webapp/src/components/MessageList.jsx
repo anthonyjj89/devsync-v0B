@@ -34,7 +34,7 @@ MessageGroup.propTypes = {
   }).isRequired
 };
 
-const MessageList = ({ messages = [], advancedMode = false }) => {
+const MessageList = ({ messages = [], advancedMode = false, className = '' }) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -52,22 +52,26 @@ const MessageList = ({ messages = [], advancedMode = false }) => {
   const messageGroups = groupMessages(messages);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Message Content */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-6 space-y-4">
-        {messageGroups.length > 0 ? (
-          messageGroups.map((group) => (
-            <MessageGroup
-              key={group.id}
-              group={group}
-            />
-          ))
-        ) : (
-          <div className="text-center text-gray-500">
-            No messages to display
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+    <div className={`bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
+      <div className="p-4 bg-gray-50 border-b">
+        <h2 className="font-bold text-lg">Chat Messages</h2>
+      </div>
+      <div className="h-full overflow-y-auto">
+        <div className="px-4 py-6 space-y-4">
+          {messageGroups.length > 0 ? (
+            messageGroups.map((group) => (
+              <MessageGroup
+                key={group.id}
+                group={group}
+              />
+            ))
+          ) : (
+            <div className="text-center text-gray-500">
+              No messages to display
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
     </div>
   );
@@ -83,7 +87,8 @@ MessageList.propTypes = {
     type: PropTypes.string,
     metadata: PropTypes.object
   })),
-  advancedMode: PropTypes.bool
+  advancedMode: PropTypes.bool,
+  className: PropTypes.string
 };
 
 export default MessageList;

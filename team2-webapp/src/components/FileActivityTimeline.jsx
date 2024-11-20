@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const FileActivityTimeline = ({ messages }) => {
+const FileActivityTimeline = ({ messages, className = '' }) => {
   const [activities, setActivities] = useState([]);
 
   useEffect(() => {
@@ -61,11 +61,11 @@ const FileActivityTimeline = ({ messages }) => {
   };
 
   return (
-    <div className="w-80 bg-white shadow-lg rounded-lg overflow-hidden">
+    <div className={`w-80 bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
       <div className="p-4 bg-gray-50 border-b">
         <h2 className="font-bold text-lg">File Activity Timeline</h2>
       </div>
-      <div className="overflow-y-auto h-[calc(100vh-10rem)]">
+      <div className="h-full overflow-y-auto">
         {activities.length === 0 ? (
           <div className="p-4 text-gray-500 text-center">
             No file activities recorded yet
@@ -119,7 +119,8 @@ FileActivityTimeline.propTypes = {
         error: PropTypes.string
       })
     })
-  })).isRequired
+  })).isRequired,
+  className: PropTypes.string
 };
 
 export default FileActivityTimeline;

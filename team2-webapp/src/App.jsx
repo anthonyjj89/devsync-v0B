@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import FileWatcher from './services/fileWatcher';
 import MessageList from './components/MessageList';
 import DevManagerDashboard from './components/DevManagerDashboard';
@@ -31,6 +31,7 @@ function App() {
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('kodu');
+  const scrollContainerRef = useRef(null);
 
   const addDebugLog = useCallback((message, data = null) => {
     const logEntry = {
@@ -187,6 +188,16 @@ function App() {
     return `${monitoringConfig.basePath}${PATH_SEPARATOR}${monitoringConfig.taskFolder}`;
   };
 
+  const handleScroll = (e) => {
+    const elements = document.querySelectorAll('.synchronized-scroll');
+    const scrollTop = e.target.scrollTop;
+    elements.forEach(el => {
+      if (el !== e.target) {
+        el.scrollTop = scrollTop;
+      }
+    });
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'kodu':
@@ -226,26 +237,8 @@ function App() {
                       Last updated: {lastUpdated.toLocaleTimeString()}
                     </div>
                   )}
-                  <div 
-                    className="text-sm text-gray-600 cursor-help"
-                    title={getDisplayPath()}
-                  >
-                    {monitoringConfig.taskFolder}
-                  </div>
-                </div>
-                {error && (
-                  <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
-                    {error}
-                  </div>
-                )}
-              </div>
-              <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
-                <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
-                  <div className="p-4 border-b bg-gray-50 font-bold flex items-center justify-between">
-                    <div>
-                      <span>Messages ({messages.length})</span>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                       <span className="text-gray-700">Advanced Mode</span>
                       <div className="relative">
                         <input
@@ -258,17 +251,34 @@ function App() {
                         <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
                       </div>
                     </label>
+                    <div 
+                      className="text-sm text-gray-600 cursor-help"
+                      title={getDisplayPath()}
+                    >
+                      {monitoringConfig.taskFolder}
+                    </div>
                   </div>
-                  <div className="flex-1 min-h-0">
-                    <MessageList 
-                      messages={messages}
-                      advancedMode={advancedMode}
-                    />
+                </div>
+                {error && (
+                  <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
+                    {error}
                   </div>
+                )}
+              </div>
+              <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
+                <div ref={scrollContainerRef} className="flex gap-4 h-full">
+                  <MessageList 
+                    messages={messages}
+                    advancedMode={advancedMode}
+                    className="flex-1 synchronized-scroll"
+                  />
+                  <FileActivityTimeline 
+                    messages={messages}
+                    className="synchronized-scroll"
+                  />
                 </div>
               </div>
             </div>
-            <FileActivityTimeline messages={messages} />
           </div>
         );
       case 'dev-manager':
@@ -281,6 +291,20 @@ function App() {
         return null;
     }
   };
+
+  // Add scroll event listeners
+  useEffect(() => {
+    const elements = document.querySelectorAll('.synchronized-scroll');
+    elements.forEach(el => {
+      el.addEventListener('scroll', handleScroll);
+    });
+
+    return () => {
+      elements.forEach(el => {
+        el.removeEventListener('scroll', handleScroll);
+      });
+    };
+  }, [activeTab]);
 
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering App', {
     isMonitoring,
