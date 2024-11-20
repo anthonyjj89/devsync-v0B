@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import FileWatcher from './services/fileWatcher';
 import MessageList from './components/MessageList';
-import PathInput from './components/PathInput';
 import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Settings from './components/Settings';
@@ -16,9 +15,11 @@ function App() {
   const [apiMessages, setApiMessages] = useState([]);
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [monitoringPath, setMonitoringPath] = useState(
-    localStorage.getItem('koduPath') || 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks'
-  );
+  const [monitoringPath, setMonitoringPath] = useState(() => {
+    const koduPath = localStorage.getItem('koduAI.path');
+    const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
+    return koduPath && koduTaskFolder ? `${koduPath}/${koduTaskFolder}` : '';
+  });
   const [error, setError] = useState('');
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
@@ -75,7 +76,9 @@ function App() {
     });
 
     setFileWatcher(watcher);
-    initializeWatcher(watcher, monitoringPath);
+    if (monitoringPath) {
+      initializeWatcher(watcher, monitoringPath);
+    }
 
     return () => {
       if (watcher) {
@@ -86,6 +89,10 @@ function App() {
 
   const initializeWatcher = async (watcher, path) => {
     try {
+      if (!path) {
+        throw new Error('No monitoring path configured');
+      }
+
       addDebugLog('Starting monitoring for path:', path);
       await watcher.setBasePath(path).validatePath();
       await watcher.start();
@@ -102,47 +109,76 @@ function App() {
     }
   };
 
-  const handlePathValidated = async (path) => {
+  const handlePathsUpdate = (newConfig) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Configuration updated', {
+      oldPath: monitoringPath,
+      newConfig
+    });
+
+    const basePath = activeTab === 'kodu' ? newConfig.koduPath : newConfig.clinePath;
+    const taskFolder = activeTab === 'kodu' ? newConfig.koduTaskFolder : newConfig.clineTaskFolder;
+    
+    if (!basePath || !taskFolder) {
+      setError('Both path and task folder must be configured');
+      return;
+    }
+
+    const fullPath = `${basePath}/${taskFolder}`;
+    setMonitoringPath(fullPath);
+
     if (fileWatcher) {
-      try {
-        fileWatcher.stop();
-        setClaudeMessages([]);
-        setApiMessages([]);
-        setError('');
-        await initializeWatcher(fileWatcher, path);
-      } catch (err) {
-        const errorMsg = `Failed to start monitoring: ${err.message}`;
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
-        setError(errorMsg);
-        setIsMonitoring(false);
-        setMonitoringPath('');
-        addDebugLog('Error starting monitoring:', err);
-      }
+      fileWatcher.stop();
+      setClaudeMessages([]);
+      setApiMessages([]);
+      setError('');
+      initializeWatcher(fileWatcher, fullPath);
     }
   };
 
-  const handlePathsUpdate = (newPaths) => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Paths updated', {
-      oldPath: monitoringPath,
-      newPath: newPaths[activeTab]
-    });
-    setMonitoringPath(newPaths[activeTab]);
+  const isPathConfigured = () => {
+    if (activeTab === 'kodu') {
+      const koduPath = localStorage.getItem('koduAI.path');
+      const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
+      return !!koduPath && !!koduTaskFolder;
+    } else {
+      const clinePath = localStorage.getItem('clineAI.path');
+      const clineTaskFolder = localStorage.getItem('clineAI.taskFolder');
+      return !!clinePath && !!clineTaskFolder;
+    }
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'kodu':
       case 'cline':
+        if (!isPathConfigured()) {
+          return (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">Configuration Required</h2>
+                <p className="text-gray-600 mb-4">
+                  Please configure both the path and task folder for {activeTab === 'kodu' ? 'Kodu' : 'Cline'} AI in settings.
+                </p>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  Go to Settings
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div className="flex-1 overflow-hidden">
             <div className="p-4 bg-gray-50 border-b">
-              <PathInput onPathValidated={handlePathValidated} />
-              <div className={`text-center p-3 mt-2 rounded-md ${
+              <div className={`text-center p-3 rounded-md ${
                 error 
                   ? 'bg-red-100 text-red-700' 
                   : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
               }`}>
-                {error || (isMonitoring ? `Monitoring: ${monitoringPath}` : 'Enter path to start monitoring')}
+                {error || (isMonitoring ? `Monitoring: ${monitoringPath}` : 'Not monitoring any path')}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-5 p-5">
@@ -185,7 +221,10 @@ function App() {
     <div className="flex h-screen bg-gray-100">
       <Sidebar 
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={tab => {
+          setActiveTab(tab);
+          setError(''); // Clear any errors when switching tabs
+        }}
       />
       <main className="flex-1 flex flex-col overflow-hidden">
         {renderContent()}
@@ -194,7 +233,7 @@ function App() {
           onClick={() => setShowDebug(!showDebug)}
           className={`m-4 px-4 py-2 rounded-md ${
             showDebug ? 'bg-red-500' : 'bg-green-500'
-          } text-white self-end`}
+          } text-white self-end transition-colors`}
         >
           {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
         </button>

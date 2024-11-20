@@ -48,7 +48,8 @@ const activeWatchers = new Map();
 
 // Helper function to normalize path for Windows
 function normalizePath(path) {
-    const normalized = normalize(path).replace(/\\/g, '/');
+    // First normalize the path using the OS-specific separator
+    const normalized = normalize(path);
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Path normalized', {
         original: path,
         normalized
@@ -80,18 +81,65 @@ async function readMessagesFromFile(filePath) {
     }
 }
 
-// Validate path endpoint
-app.get('/api/validate-path', async (req, res) => {
-    const requestId = `validate-path-${Date.now()}`;
+// New endpoint to get subfolders
+app.get('/api/get-subfolders', async (req, res) => {
+    const requestId = `get-subfolders-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
     const basePath = normalizePath(req.query.path);
     if (!basePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided');
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided for subfolders');
         return res.json({ success: false, error: 'No path provided' });
     }
 
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path', { basePath });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Getting subfolders', { basePath });
+
+    try {
+        // Check if base path exists and is accessible
+        await fs.promises.access(basePath);
+        
+        // Get all items in the directory
+        const items = await fs.promises.readdir(basePath, { withFileTypes: true });
+        
+        // Filter for directories only and get their names
+        const folders = items
+            .filter(item => item.isDirectory())
+            .map(item => item.name)
+            .sort((a, b) => b.localeCompare(a)); // Sort in descending order (newest first)
+
+        const duration = debugLogger.endTimer(requestId, COMPONENT);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully retrieved subfolders', {
+            basePath,
+            folderCount: folders.length,
+            durationMs: duration
+        });
+
+        res.json({ success: true, folders });
+    } catch (error) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting subfolders', {
+            basePath,
+            error: error.message
+        });
+        res.json({
+            success: false,
+            error: `Failed to get subfolders: ${error.message}`
+        });
+    }
+});
+
+// Updated validate-path endpoint to handle task folders
+app.get('/api/validate-path', async (req, res) => {
+    const requestId = `validate-path-${Date.now()}`;
+    debugLogger.startTimer(requestId);
+    
+    const { basePath: rawBasePath, taskFolder } = req.query;
+    if (!rawBasePath || !taskFolder) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ success: false, error: 'Both base path and task folder are required' });
+    }
+
+    const basePath = normalizePath(join(rawBasePath, taskFolder));
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path', { basePath, taskFolder });
 
     try {
         // Check if all required files exist
@@ -199,17 +247,18 @@ app.get('/api/validate-path', async (req, res) => {
     }
 });
 
-// API to fetch claude messages
+// Updated API endpoints to handle task folders
 app.get('/api/claude-messages', async (req, res) => {
     const requestId = `fetch-claude-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const basePath = normalizePath(req.query.path);
-    if (!basePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided for claude messages');
-        return res.json({ error: 'No path provided' });
+    const { basePath: rawBasePath, taskFolder } = req.query;
+    if (!rawBasePath || !taskFolder) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ error: 'Both base path and task folder are required' });
     }
 
+    const basePath = normalizePath(join(rawBasePath, taskFolder));
     const filePath = join(basePath, CLAUDE_MESSAGES_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath });
 
@@ -233,17 +282,17 @@ app.get('/api/claude-messages', async (req, res) => {
     }
 });
 
-// API to fetch API conversation history
 app.get('/api/api-messages', async (req, res) => {
     const requestId = `fetch-api-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const basePath = normalizePath(req.query.path);
-    if (!basePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided for API messages');
-        return res.json({ error: 'No path provided' });
+    const { basePath: rawBasePath, taskFolder } = req.query;
+    if (!rawBasePath || !taskFolder) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ error: 'Both base path and task folder are required' });
     }
 
+    const basePath = normalizePath(join(rawBasePath, taskFolder));
     const filePath = join(basePath, API_HISTORY_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath });
 
@@ -267,17 +316,17 @@ app.get('/api/api-messages', async (req, res) => {
     }
 });
 
-// API to get last updated timestamp
 app.get('/api/last-updated', async (req, res) => {
     const requestId = `fetch-timestamp-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const basePath = normalizePath(req.query.path);
-    if (!basePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided for timestamp');
-        return res.json({ error: 'No path provided' });
+    const { basePath: rawBasePath, taskFolder } = req.query;
+    if (!rawBasePath || !taskFolder) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ error: 'Both base path and task folder are required' });
     }
 
+    const basePath = normalizePath(join(rawBasePath, taskFolder));
     const filePath = join(basePath, LAST_UPDATED_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading last updated timestamp', { filePath });
 

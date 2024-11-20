@@ -9,6 +9,7 @@ class FileWatcher {
         this.intervalId = null;
         this.lastTimestamp = null;
         this.basePath = null;
+        this.taskFolder = null;
         this.socket = null;
         this.retryCount = 0;
         this.maxRetries = 5;
@@ -18,29 +19,83 @@ class FileWatcher {
         });
     }
 
-    setBasePath(path) {
-        // Normalize path to use forward slashes
-        this.basePath = path.replace(/\\/g, '/');
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Base path set', {
-            path: this.basePath
+    setBasePath(path, taskFolder = '') {
+        // Store paths separately
+        this.basePath = path;
+        this.taskFolder = taskFolder;
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Paths set', {
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
         });
         return this;  // Return this to allow method chaining
     }
 
+    async getSubfolders() {
+        if (!this.basePath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set for getting subfolders');
+            return [];
+        }
+
+        const getFoldersId = `get-subfolders-${Date.now()}`;
+        debugLogger.startTimer(getFoldersId);
+
+        try {
+            const encodedPath = encodeURIComponent(this.basePath);
+            const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
+                credentials: 'include'
+            });
+
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Subfolders response received', {
+                status: response.status,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get subfolders');
+            }
+
+            const duration = debugLogger.endTimer(getFoldersId, COMPONENT);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Subfolders retrieved successfully', {
+                folderCount: data.folders.length,
+                durationMs: duration
+            });
+
+            return data.folders;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get subfolders', {
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
     async validatePath() {
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set');
+            throw new Error('Both base path and task folder must be set');
+        }
+
         const validationId = `validate-path-${Date.now()}`;
         debugLogger.startTimer(validationId);
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path...', {
-            path: this.basePath
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
         });
 
         try {
-            // Properly encode the path for the URL
-            const encodedPath = encodeURIComponent(this.basePath).replace(/%2F/g, '/');
-            const response = await fetch(`http://localhost:3002/api/validate-path?path=${encodedPath}`, {
-                credentials: 'include'
-            });
+            const encodedBasePath = encodeURIComponent(this.basePath);
+            const encodedTaskFolder = encodeURIComponent(this.taskFolder);
+            const response = await fetch(
+                `http://localhost:3002/api/validate-path?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
+                { credentials: 'include' }
+            );
 
             debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Path validation response received', {
                 status: response.status,
@@ -59,14 +114,16 @@ class FileWatcher {
             
             const duration = debugLogger.endTimer(validationId, COMPONENT);
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Path validated successfully', {
-                path: this.basePath,
+                basePath: this.basePath,
+                taskFolder: this.taskFolder,
                 durationMs: duration
             });
 
             return true;
         } catch (error) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation failed', {
-                path: this.basePath,
+                basePath: this.basePath,
+                taskFolder: this.taskFolder,
                 error: error.message
             });
             throw error;
@@ -74,8 +131,8 @@ class FileWatcher {
     }
 
     async readFile(type) {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set for file read');
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set for file read');
             return null;
         }
 
@@ -84,15 +141,18 @@ class FileWatcher {
 
         const endpoint = type === 'claude' ? 'claude-messages' : 'api-messages';
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Reading ${type} messages`, {
-            path: this.basePath,
+            basePath: this.basePath,
+            taskFolder: this.taskFolder,
             endpoint
         });
 
         try {
-            const encodedPath = encodeURIComponent(this.basePath).replace(/%2F/g, '/');
-            const response = await fetch(`http://localhost:3002/api/${endpoint}?path=${encodedPath}`, {
-                credentials: 'include'
-            });
+            const encodedBasePath = encodeURIComponent(this.basePath);
+            const encodedTaskFolder = encodeURIComponent(this.taskFolder);
+            const response = await fetch(
+                `http://localhost:3002/api/${endpoint}?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
+                { credentials: 'include' }
+            );
 
             debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `${type} messages response received`, {
                 status: response.status,
@@ -135,8 +195,8 @@ class FileWatcher {
     }
 
     async checkLastUpdated() {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set for timestamp check');
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set for timestamp check');
             return null;
         }
 
@@ -144,10 +204,12 @@ class FileWatcher {
         debugLogger.startTimer(checkId);
 
         try {
-            const encodedPath = encodeURIComponent(this.basePath).replace(/%2F/g, '/');
-            const response = await fetch(`http://localhost:3002/api/last-updated?path=${encodedPath}`, {
-                credentials: 'include'
-            });
+            const encodedBasePath = encodeURIComponent(this.basePath);
+            const encodedTaskFolder = encodeURIComponent(this.taskFolder);
+            const response = await fetch(
+                `http://localhost:3002/api/last-updated?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
+                { credentials: 'include' }
+            );
 
             debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Last updated response received', {
                 status: response.status,
@@ -234,22 +296,25 @@ class FileWatcher {
     }
 
     async start() {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set');
-            return this;
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set');
+            throw new Error('Both base path and task folder must be set');
         }
 
-        // Store the current path before stopping
-        const currentPath = this.basePath;
+        // Store the current paths before stopping
+        const currentBasePath = this.basePath;
+        const currentTaskFolder = this.taskFolder;
 
         // Stop any existing interval and socket
         this.stop();
 
-        // Restore the path
-        this.basePath = currentPath;
+        // Restore the paths
+        this.basePath = currentBasePath;
+        this.taskFolder = currentTaskFolder;
 
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file monitoring', {
-            path: this.basePath
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
         });
 
         // Set up Socket.IO connection
@@ -259,8 +324,8 @@ class FileWatcher {
     }
 
     async checkAndUpdate() {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set for update check');
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set for update check');
             return;
         }
 

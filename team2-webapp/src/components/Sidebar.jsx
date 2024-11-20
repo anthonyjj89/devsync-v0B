@@ -43,6 +43,26 @@ const Sidebar = ({ activeTab, onTabChange }) => {
         ${collapsed ? 'w-16' : 'w-64'}
       `}
     >
+      {/* Logo Section */}
+      <div className={`
+        p-4 
+        border-b 
+        border-gray-700 
+        flex 
+        items-center 
+        justify-center
+        bg-gray-900
+      `}>
+        {collapsed ? (
+          <div className="text-2xl font-bold text-blue-500">D</div>
+        ) : (
+          <div className="text-2xl font-bold">
+            <span className="text-blue-500">Dev</span>
+            <span className="text-gray-300">Sync</span>
+          </div>
+        )}
+      </div>
+
       <button
         onClick={toggleCollapse}
         className="p-4 hover:bg-gray-700 text-gray-400 self-end"
