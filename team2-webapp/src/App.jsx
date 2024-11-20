@@ -12,11 +12,12 @@ const COMPONENT = 'App';
 const PATH_SEPARATOR = navigator.platform.toLowerCase().includes('win') ? '\\' : '/';
 
 function App() {
-  const [claudeMessages, setClaudeMessages] = useState([]);
-  const [apiMessages, setApiMessages] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [showRawMessages, setShowRawMessages] = useState(false);
+  const [showMessageSettings, setShowMessageSettings] = useState(false);
   const [monitoringConfig, setMonitoringConfig] = useState(() => {
     const koduPath = localStorage.getItem('koduAI.path');
     const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
@@ -60,50 +61,56 @@ function App() {
         
         // Process messages while preserving their roles and content
         const processedData = data?.map(msg => {
-          // Extract text from content array if present
-          let text = '';
+          // Store raw message content
+          const rawContent = Array.isArray(msg.content) 
+            ? msg.content.map(item => item.text).join('\n')
+            : msg.content;
+
+          // Extract filtered text from content array if present
+          let filteredText = '';
           if (Array.isArray(msg.content)) {
-            text = msg.content
+            filteredText = msg.content
               .filter(item => item.type === 'text')
               .map(item => {
                 // Extract text from task tags if present
                 if (item.text.includes('<task>')) {
                   const taskMatch = /<task>(.*?)<\/task>/s.exec(item.text);
-                  return taskMatch ? taskMatch[1].trim() : item.text;
+                  return taskMatch ? taskMatch[1].trim() : '';
                 }
                 // Extract text from answer tags if present
                 if (item.text.includes('<answer>')) {
                   const answerMatch = /<answer>(.*?)<\/answer>/s.exec(item.text);
-                  return answerMatch ? answerMatch[1].trim() : item.text;
+                  return answerMatch ? answerMatch[1].trim() : '';
                 }
-                // Remove environment details and other system tags
+                // Extract text from tool tags if present
+                if (item.text.includes('<tool>')) {
+                  const toolMatch = /<tool>(.*?)<\/tool>/s.exec(item.text);
+                  return toolMatch ? toolMatch[1].trim() : '';
+                }
+                // Remove all XML-like tags and keep only plain text
                 return item.text
-                  .replace(/<environment_details>.*?<\/environment_details>/s, '')
-                  .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
-                  .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
-                  .replace(/<thinking>.*?<\/thinking>/s, '')
+                  .replace(/<[^>]+>/g, '')
+                  .replace(/\{[^}]+\}/g, '')
                   .trim();
               })
               .filter(Boolean)
               .join('\n');
           } else if (typeof msg.content === 'string') {
-            text = msg.content;
+            filteredText = msg.content;
           }
 
           return {
             ...msg,
-            text: text || msg.text || '',
+            rawContent,
+            text: filteredText || msg.text || '',
             role: msg.role || 'assistant',
             timestamp: msg.ts || Date.now()
           };
         }) || [];
         
         if (type === 'claude') {
-          setClaudeMessages(processedData);
-          addDebugLog('Updated claude messages', processedData);
-        } else if (type === 'api') {
-          setApiMessages(processedData);
-          addDebugLog('Updated api messages', processedData);
+          setMessages(processedData);
+          addDebugLog('Updated messages', processedData);
         }
         
         setError('');
@@ -175,8 +182,7 @@ function App() {
 
     if (fileWatcher) {
       fileWatcher.stop();
-      setClaudeMessages([]);
-      setApiMessages([]);
+      setMessages([]);
       setError('');
     }
   };
@@ -249,30 +255,51 @@ function App() {
                 </div>
               )}
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-5 p-5 min-h-0">
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col min-h-0">
-                <div className="p-4 border-b bg-gray-50 font-bold">
-                  Claude Messages ({claudeMessages.length})
+            <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
+                <div className="p-4 border-b bg-gray-50 font-bold flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>Messages ({messages.length})</span>
+                  </div>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowMessageSettings(!showMessageSettings)}
+                      className="p-2 text-gray-600 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-200"
+                      title="Message Settings"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    {showMessageSettings && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                        <label className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showRawMessages}
+                            onChange={() => setShowRawMessages(!showRawMessages)}
+                            className="mr-2"
+                          />
+                          Show Raw Messages
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex-1 min-h-0">
-                  <MessageList messages={claudeMessages} type="claude" />
-                </div>
-              </div>
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col min-h-0">
-                <div className="p-4 border-b bg-gray-50 font-bold">
-                  API Messages ({apiMessages.length})
-                </div>
-                <div className="flex-1 min-h-0">
-                  <MessageList messages={apiMessages} type="api" />
+                  <MessageList 
+                    messages={messages} 
+                    showRawContent={showRawMessages}
+                  />
                 </div>
               </div>
             </div>
           </div>
         );
       case 'dev-manager':
-        return <DevManagerDashboard messages={claudeMessages} />;
+        return <DevManagerDashboard messages={messages} />;
       case 'project-manager':
-        return <ProjectOwnerDashboard messages={claudeMessages} />;
+        return <ProjectOwnerDashboard messages={messages} />;
       case 'settings':
         return <Settings onSave={handlePathsUpdate} />;
       default:
@@ -283,8 +310,7 @@ function App() {
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering App', {
     isMonitoring,
     hasError: !!error,
-    claudeMessagesCount: claudeMessages.length,
-    apiMessagesCount: apiMessages.length,
+    messagesCount: messages.length,
     debugLogsCount: debugLogs.length,
     activeTab,
     monitoringConfig
@@ -302,27 +328,31 @@ function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {renderContent()}
 
-        <button 
-          onClick={() => setShowDebug(!showDebug)}
-          className={`m-4 px-4 py-2 rounded-md ${
-            showDebug ? 'bg-red-500' : 'bg-green-500'
-          } text-white self-end transition-colors`}
-        >
-          {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
-        </button>
+        <div className="fixed bottom-0 left-0 right-0 z-10">
+          <div className="bg-gray-100 px-5 py-4 border-t">
+            <button 
+              onClick={() => setShowDebug(!showDebug)}
+              className={`px-4 py-2 rounded-lg ${
+                showDebug ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+              } text-white transition-colors shadow-sm`}
+            >
+              {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
+            </button>
 
-        {showDebug && (
-          <div className="m-4 bg-gray-900 text-white p-4 h-48 overflow-y-auto rounded-lg font-mono text-sm">
-            {debugLogs.map((log, index) => (
-              <div key={index} className="mb-1 whitespace-pre-wrap">
-                [{log.timestamp}] {log.message}
-                {log.data && (
-                  <pre className="text-xs text-gray-400">{log.data}</pre>
-                )}
+            {showDebug && (
+              <div className="mt-3 bg-gray-900 text-white p-4 h-48 overflow-y-auto rounded-lg font-mono text-sm shadow-lg">
+                {debugLogs.map((log, index) => (
+                  <div key={index} className="mb-1 whitespace-pre-wrap">
+                    [{log.timestamp}] {log.message}
+                    {log.data && (
+                      <pre className="text-xs text-gray-400">{log.data}</pre>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   );

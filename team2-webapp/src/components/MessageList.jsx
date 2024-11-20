@@ -8,13 +8,12 @@ const COMPONENT = 'MessageList';
 const cleanText = (text) => {
   if (!text) return null;
   
-  // Remove JSON structures
-  if (text.startsWith("{") && text.endsWith("}")) return null;
-
-  // Remove tool-related or thinking tags
+  // Remove only system-related tags and keep the actual message content
   return text
-    .replace(/<[^>]+>/g, "") // Remove all XML-like tags
-    .replace(/\{[^}]+\}/g, "") // Remove JSON objects
+    .replace(/<environment_details>.*?<\/environment_details>/s, '')
+    .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
+    .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
+    .replace(/<thinking>.*?<\/thinking>/s, '')
     .trim();
 };
 
@@ -34,7 +33,7 @@ const groupMessages = (messages) => {
   return grouped;
 };
 
-const MessageList = ({ messages = [] }) => {
+const MessageList = ({ messages = [], showRawContent = false }) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -44,9 +43,10 @@ const MessageList = ({ messages = [] }) => {
   useEffect(() => {
     scrollToBottom();
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Rendering messages', {
-      messageCount: messages.length
+      messageCount: messages.length,
+      showRawContent
     });
-  }, [messages]);
+  }, [messages, showRawContent]);
 
   const processMessage = (message) => {
     if (!message) {
@@ -55,15 +55,16 @@ const MessageList = ({ messages = [] }) => {
     }
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message', { 
-      rawMessage: message 
+      rawMessage: message,
+      showRawContent
     });
 
     // Extract core message properties
     const role = message.role || 'user';
     const timestamp = message.timestamp || Date.now();
 
-    // Clean the text content
-    const text = cleanText(message.text);
+    // Use raw content if showRawContent is true, otherwise use filtered text
+    const text = showRawContent ? message.rawContent : message.text;
 
     if (!text) {
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Skipping empty or invalid message');
@@ -71,7 +72,7 @@ const MessageList = ({ messages = [] }) => {
     }
 
     const processedMessage = {
-      text,
+      text: cleanText(text),
       timestamp,
       role
     };
@@ -122,8 +123,10 @@ MessageList.propTypes = {
   messages: PropTypes.arrayOf(PropTypes.shape({
     role: PropTypes.string,
     text: PropTypes.string,
+    rawContent: PropTypes.string,
     timestamp: PropTypes.number
-  }))
+  })),
+  showRawContent: PropTypes.bool
 };
 
 export default MessageList;
