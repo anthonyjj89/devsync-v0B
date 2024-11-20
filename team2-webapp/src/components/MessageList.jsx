@@ -8,13 +8,32 @@ const COMPONENT = 'MessageList';
 const cleanText = (text) => {
   if (!text) return null;
   
-  // Remove only system-related tags and keep the actual message content
-  return text
-    .replace(/<environment_details>.*?<\/environment_details>/s, '')
-    .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
-    .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
-    .replace(/<thinking>.*?<\/thinking>/s, '')
-    .trim();
+  try {
+    // Check if the text is JSON
+    const jsonContent = JSON.parse(text);
+    
+    // Extract relevant content based on message type
+    if (jsonContent.tool) {
+      return `Tool: ${jsonContent.tool}`;
+    }
+    if (jsonContent.request) {
+      return jsonContent.request.messages?.[0]?.content?.text || null;
+    }
+    if (jsonContent.question) {
+      return jsonContent.question;
+    }
+    
+    // Return stringified JSON if no specific handling
+    return JSON.stringify(jsonContent, null, 2);
+  } catch (e) {
+    // If not JSON, proceed with normal text cleaning
+    return text
+      .replace(/<environment_details>.*?<\/environment_details>/s, '')
+      .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
+      .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
+      .replace(/<thinking>.*?<\/thinking>/s, '')
+      .trim();
+  }
 };
 
 const groupMessages = (messages) => {
@@ -74,7 +93,10 @@ const MessageList = ({ messages = [], showRawContent = false }) => {
     const processedMessage = {
       text: cleanText(text),
       timestamp,
-      role
+      role,
+      isError: message.isError || false,
+      errorText: message.errorText,
+      messageType: message.messageType || 'text'
     };
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processed message', {
@@ -124,7 +146,10 @@ MessageList.propTypes = {
     role: PropTypes.string,
     text: PropTypes.string,
     rawContent: PropTypes.string,
-    timestamp: PropTypes.number
+    timestamp: PropTypes.number,
+    isError: PropTypes.bool,
+    errorText: PropTypes.string,
+    messageType: PropTypes.string
   })),
   showRawContent: PropTypes.bool
 };

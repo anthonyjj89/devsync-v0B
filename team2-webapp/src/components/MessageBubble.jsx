@@ -26,16 +26,18 @@ const MessageBubble = ({
   role = 'user',
   showTimestamp = true,
   isError = false,
-  errorText = null
+  errorText = null,
+  messageType = 'text'
 }) => {
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering message bubble', {
       role,
       isError,
       hasTimestamp: !!timestamp,
-      textLength: text?.length
+      textLength: text?.length,
+      messageType
     });
-  }, [text, timestamp, role, isError]);
+  }, [text, timestamp, role, isError, messageType]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return '';
@@ -56,13 +58,31 @@ const MessageBubble = ({
     }
   }, [timestamp]);
 
+  const getMessageTypeStyle = (text, type) => {
+    if (text?.startsWith('Tool:')) {
+      return 'bg-purple-100 text-purple-900 border border-purple-200';
+    }
+    
+    switch (type) {
+      case 'system':
+        return 'bg-gray-100 text-gray-800 border border-gray-200';
+      case 'error':
+        return 'bg-red-100 text-red-900 border-2 border-red-300';
+      case 'json':
+        return 'bg-blue-50 text-blue-900 border border-blue-200 font-mono text-sm';
+      default:
+        return '';
+    }
+  };
+
   const bubbleClasses = useMemo(() => {
     const baseClasses = [
-      'p-2',
+      'p-3',
       'rounded-lg',
       'max-w-[80%]',
       'break-words',
-      'whitespace-pre-wrap'
+      'whitespace-pre-wrap',
+      'shadow-sm'
     ];
 
     // Role-based styling
@@ -78,13 +98,19 @@ const MessageBubble = ({
         baseClasses.push('bg-blue-100', 'text-blue-900');
     }
 
+    // Message type styling
+    const typeStyle = getMessageTypeStyle(text, messageType);
+    if (typeStyle) {
+      baseClasses.push(typeStyle);
+    }
+
     // Error state
     if (isError) {
-      baseClasses.push('bg-red-100', 'text-red-900', 'border', 'border-red-300');
+      baseClasses.push('bg-red-100', 'text-red-900', 'border-2', 'border-red-300');
     }
 
     return baseClasses.join(' ');
-  }, [role, isError]);
+  }, [role, isError, text, messageType]);
 
   const containerClasses = useMemo(() => {
     const isUserMessage = role === 'user';
@@ -92,6 +118,30 @@ const MessageBubble = ({
   }, [role]);
 
   const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.user;
+
+  const renderContent = () => {
+    if (isError && errorText) {
+      return (
+        <>
+          <div className="text-red-600 font-medium mb-1">
+            Error: {errorText}
+          </div>
+          {text && <div>{text}</div>}
+        </>
+      );
+    }
+
+    if (messageType === 'json') {
+      try {
+        const formattedJson = JSON.stringify(JSON.parse(text), null, 2);
+        return <pre className="overflow-x-auto">{formattedJson}</pre>;
+      } catch {
+        return text;
+      }
+    }
+
+    return text;
+  };
 
   return (
     <div className={containerClasses}>
@@ -110,16 +160,7 @@ const MessageBubble = ({
           </div>
         )}
         <div className={bubbleClasses}>
-          {isError && errorText ? (
-            <>
-              <div className="text-red-600 mb-1">
-                Error: {errorText}
-              </div>
-              {text && <div>{text}</div>}
-            </>
-          ) : (
-            text
-          )}
+          {renderContent()}
         </div>
         {role === 'user' && (
           <div className="flex items-center gap-1" title={role}>
@@ -140,7 +181,8 @@ MessageBubble.propTypes = {
   role: PropTypes.oneOf(['user', 'assistant', 'dev manager']),
   showTimestamp: PropTypes.bool,
   isError: PropTypes.bool,
-  errorText: PropTypes.string
+  errorText: PropTypes.string,
+  messageType: PropTypes.oneOf(['text', 'system', 'error', 'json'])
 };
 
 export default MessageBubble;

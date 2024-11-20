@@ -48,6 +48,51 @@ function App() {
     });
   }, []);
 
+  const extractTextFromTags = (text, tagName) => {
+    const regex = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 's');
+    const match = regex.exec(text);
+    return match ? match[1].trim() : '';
+  };
+
+  const cleanMessage = (text, role) => {
+    if (!text) return '';
+
+    // For user messages, just return the clean text
+    if (role === 'user') {
+      return text.replace(/<[^>]+>/g, '').trim();
+    }
+
+    // For AI messages, extract specific content from tags
+    const taskContent = extractTextFromTags(text, 'task');
+    const answerContent = extractTextFromTags(text, 'answer');
+    const toolContent = extractTextFromTags(text, 'tool');
+    const thinkingContent = extractTextFromTags(text, 'thinking');
+
+    // If any specific content was found, use that
+    if (taskContent || answerContent || toolContent || thinkingContent) {
+      return [taskContent, answerContent, toolContent, thinkingContent]
+        .filter(Boolean)
+        .join('\n');
+    }
+
+    // Otherwise, clean up the text by removing system tags and metadata
+    return text
+      .replace(/<environment_details>.*?<\/environment_details>/gs, '')
+      .replace(/<most_important_context>.*?<\/most_important_context>/gs, '')
+      .replace(/<toolResponse>.*?<\/toolResponse>/gs, '')
+      .replace(/<tool_name>.*?<\/tool_name>/gs, '')
+      .replace(/<parameter\d*_name>.*?<\/parameter\d*_name>/gs, '')
+      .replace(/<path>.*?<\/path>/gs, '')
+      .replace(/<command>.*?<\/command>/gs, '')
+      .replace(/<content>.*?<\/content>/gs, '')
+      .replace(/<question>.*?<\/question>/gs, '')
+      .replace(/<result>.*?<\/result>/gs, '')
+      .replace(/\{[^}]+\}/g, '') // Remove JSON-like structures
+      .replace(/<[^>]+>/g, '') // Remove any remaining XML-like tags
+      .replace(/^\s*\n/gm, '') // Remove empty lines
+      .trim();
+  };
+
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing App');
 
@@ -66,44 +111,25 @@ function App() {
             ? msg.content.map(item => item.text).join('\n')
             : msg.content;
 
+          const role = msg.role || 'assistant';
+
           // Extract filtered text from content array if present
           let filteredText = '';
           if (Array.isArray(msg.content)) {
             filteredText = msg.content
               .filter(item => item.type === 'text')
-              .map(item => {
-                // Extract text from task tags if present
-                if (item.text.includes('<task>')) {
-                  const taskMatch = /<task>(.*?)<\/task>/s.exec(item.text);
-                  return taskMatch ? taskMatch[1].trim() : '';
-                }
-                // Extract text from answer tags if present
-                if (item.text.includes('<answer>')) {
-                  const answerMatch = /<answer>(.*?)<\/answer>/s.exec(item.text);
-                  return answerMatch ? answerMatch[1].trim() : '';
-                }
-                // Extract text from tool tags if present
-                if (item.text.includes('<tool>')) {
-                  const toolMatch = /<tool>(.*?)<\/tool>/s.exec(item.text);
-                  return toolMatch ? toolMatch[1].trim() : '';
-                }
-                // Remove all XML-like tags and keep only plain text
-                return item.text
-                  .replace(/<[^>]+>/g, '')
-                  .replace(/\{[^}]+\}/g, '')
-                  .trim();
-              })
+              .map(item => cleanMessage(item.text, role))
               .filter(Boolean)
               .join('\n');
           } else if (typeof msg.content === 'string') {
-            filteredText = msg.content;
+            filteredText = cleanMessage(msg.content, role);
           }
 
           return {
             ...msg,
             rawContent,
             text: filteredText || msg.text || '',
-            role: msg.role || 'assistant',
+            role,
             timestamp: msg.ts || Date.now()
           };
         }) || [];
