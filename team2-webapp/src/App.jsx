@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import FileWatcher from './services/fileWatcher';
 import MessageList from './components/MessageList';
 import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
-import FileActivityTimeline from './components/FileActivityTimeline';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
@@ -31,7 +30,6 @@ function App() {
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('kodu');
-  const scrollContainerRef = useRef(null);
 
   const addDebugLog = useCallback((message, data = null) => {
     const logEntry = {
@@ -188,16 +186,6 @@ function App() {
     return `${monitoringConfig.basePath}${PATH_SEPARATOR}${monitoringConfig.taskFolder}`;
   };
 
-  const handleScroll = (e) => {
-    const elements = document.querySelectorAll('.synchronized-scroll');
-    const scrollTop = e.target.scrollTop;
-    elements.forEach(el => {
-      if (el !== e.target) {
-        el.scrollTop = scrollTop;
-      }
-    });
-  };
-
   const renderContent = () => {
     switch (activeTab) {
       case 'kodu':
@@ -266,17 +254,11 @@ function App() {
                 )}
               </div>
               <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
-                <div ref={scrollContainerRef} className="flex gap-4 h-full">
-                  <MessageList 
-                    messages={messages}
-                    advancedMode={advancedMode}
-                    className="flex-1 synchronized-scroll"
-                  />
-                  <FileActivityTimeline 
-                    messages={messages}
-                    className="synchronized-scroll"
-                  />
-                </div>
+                <MessageList 
+                  messages={messages}
+                  advancedMode={advancedMode}
+                  className="h-full"
+                />
               </div>
             </div>
           </div>
@@ -291,20 +273,6 @@ function App() {
         return null;
     }
   };
-
-  // Add scroll event listeners
-  useEffect(() => {
-    const elements = document.querySelectorAll('.synchronized-scroll');
-    elements.forEach(el => {
-      el.addEventListener('scroll', handleScroll);
-    });
-
-    return () => {
-      elements.forEach(el => {
-        el.removeEventListener('scroll', handleScroll);
-      });
-    };
-  }, [activeTab]);
 
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering App', {
     isMonitoring,

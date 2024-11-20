@@ -28,7 +28,7 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
         }
         
         return acc;
-      }, []).sort((a, b) => b.timestamp - a.timestamp); // Sort by most recent first
+      }, []).sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to match chat order
     };
 
     setActivities(extractFileActivities(messages));
@@ -63,45 +63,47 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
   return (
     <div className={`w-80 bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
       <div className="p-4 bg-gray-50 border-b">
-        <h2 className="font-bold text-lg">File Activity Timeline</h2>
+        <h2 className="font-bold text-lg">File Activity</h2>
       </div>
-      <div className="h-full overflow-y-auto">
-        {activities.length === 0 ? (
-          <div className="p-4 text-gray-500 text-center">
-            No file activities recorded yet
-          </div>
-        ) : (
-          <div className="p-4">
-            {activities.map((activity, index) => (
+      <div className="h-full overflow-y-auto synchronized-scroll">
+        <div className="p-4">
+          {activities.length === 0 ? (
+            <div className="text-gray-500 text-center">
+              No file activities recorded yet
+            </div>
+          ) : (
+            activities.map((activity, index) => (
               <div
                 key={`${activity.timestamp}-${index}`}
-                className={`mb-4 pl-4 border-l-2 ${getActivityColor(activity.status)}`}
+                className="flex items-start mb-6 last:mb-0"
               >
-                <div className="flex items-start gap-2">
-                  <span className="text-xl">{getActivityIcon(activity.type)}</span>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">
-                      {activity.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </div>
-                    {activity.path && (
-                      <div className="text-xs text-gray-600 break-all">
-                        {activity.path}
+                <div className="w-24 text-center text-xs text-gray-500 px-2">
+                  {new Date(activity.timestamp).toLocaleTimeString()}
+                </div>
+                <div className={`flex-1 pl-4 border-l-2 ${getActivityColor(activity.status)}`}>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl">{getActivityIcon(activity.type)}</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">
+                        {activity.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </div>
-                    )}
-                    {activity.error && (
-                      <div className="text-xs text-red-500 mt-1">
-                        {activity.error}
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-400 mt-1">
-                      {new Date(activity.timestamp).toLocaleTimeString()}
+                      {activity.path && (
+                        <div className="text-xs text-gray-600 break-all">
+                          {activity.path}
+                        </div>
+                      )}
+                      {activity.error && (
+                        <div className="text-xs text-red-500 mt-1">
+                          {activity.error}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
