@@ -130,7 +130,7 @@ const MessageBubble = ({
 
     // Error state
     if (isError) {
-      baseClasses.push('bg-red-50', 'text-red-900', 'border-2', 'border-red-300');
+      baseClasses.push('bg-red-50', 'text-red-900', 'border', 'border-red-200');
     }
 
     return baseClasses.join(' ');
@@ -146,14 +146,8 @@ const MessageBubble = ({
 
   const renderContent = () => {
     if (isError && errorText) {
-      return (
-        <>
-          <div className="text-red-600 font-medium mb-1">
-            Error: {errorText}
-          </div>
-          {text && <div>{text}</div>}
-        </>
-      );
+      // Just show the error text without the "Error:" prefix
+      return errorText;
     }
 
     // Handle API requests and JSON content

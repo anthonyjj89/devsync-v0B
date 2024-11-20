@@ -69,6 +69,16 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
       advancedMode
     });
 
+    // Handle error messages in basic mode
+    if (!advancedMode && jsonContent.isError && jsonContent.errorText) {
+      return {
+        type: 'text',
+        content: jsonContent.errorText,
+        metadata: { original: jsonContent, isError: true },
+        role: 'system'
+      };
+    }
+
     // Handle array content
     if (Array.isArray(jsonContent.content)) {
       const textContent = jsonContent.content
@@ -135,6 +145,7 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
           !jsonContent.text?.includes('<thinking>')) {
         const role = determineMessageRole(jsonContent);
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode message processed', { role });
+
         return {
           type: 'text',
           content: jsonContent.text,
@@ -208,14 +219,26 @@ export const processMessageContent = (message, advancedMode = false) => {
   });
 
   try {
-    // Handle message object with content array
-    if (message.content && Array.isArray(message.content)) {
+    // Handle error messages in basic mode
+    if (!advancedMode && message.isError && message.errorText) {
       return {
         type: 'text',
-        content: message.content
-          .filter(item => item.type === 'text')
-          .map(item => item.text)
-          .join('\n'),
+        content: message.errorText,
+        metadata: { original: message, isError: true },
+        role: 'system'
+      };
+    }
+
+    // Handle message object with content array
+    if (message.content && Array.isArray(message.content)) {
+      const textContent = message.content
+        .filter(item => item.type === 'text')
+        .map(item => item.text)
+        .join('\n');
+
+      return {
+        type: 'text',
+        content: textContent,
         metadata: { original: message },
         role: determineMessageRole(message)
       };
@@ -252,13 +275,11 @@ export const processMessageContent = (message, advancedMode = false) => {
         .trim();
 
       if (cleanedText) {
-        const role = text.includes('user_feedback') ? 'user' : 'assistant';
-        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode text processed', { role });
         return {
           type: 'text',
           content: cleanedText,
           metadata: { original: text },
-          role
+          role: text.includes('user_feedback') ? 'user' : 'assistant'
         };
       }
       return null;
