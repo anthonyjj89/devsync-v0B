@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Sample JSON files
+api_messages.json
+claude_messages.json
+api_conversation_history.json
+last_updated.txt
+public/api_messages.json
+public/claude_messages.json
+public/api_conversation_history.json
+public/last_updated.txt
