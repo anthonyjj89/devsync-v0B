@@ -18,7 +18,6 @@ function App() {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [advancedMode, setAdvancedMode] = useState(false);
-  const [showMessageSettings, setShowMessageSettings] = useState(false);
   const [monitoringConfig, setMonitoringConfig] = useState(() => {
     const koduPath = localStorage.getItem('koduAI.path');
     const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
@@ -241,33 +240,22 @@ function App() {
             <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
               <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
                 <div className="p-4 border-b bg-gray-50 font-bold flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div>
                     <span>Messages ({messages.length})</span>
                   </div>
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowMessageSettings(!showMessageSettings)}
-                      className="p-2 text-gray-600 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-200"
-                      title="Message Settings"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    {showMessageSettings && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                        <label className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={advancedMode}
-                            onChange={() => setAdvancedMode(!advancedMode)}
-                            className="mr-2"
-                          />
-                          Advanced Mode
-                        </label>
-                      </div>
-                    )}
-                  </div>
+                  <label className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none">
+                    <span className="text-gray-700">Advanced Mode</span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={advancedMode}
+                        onChange={() => setAdvancedMode(!advancedMode)}
+                        className="sr-only"
+                      />
+                      <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                      <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                    </div>
+                  </label>
                 </div>
                 <div className="flex-1 min-h-0">
                   <MessageList 
