@@ -182,18 +182,33 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
       }
     }
 
-    // In basic mode, skip all other message types except direct AI/user communication
+    // Handle thinking messages in both modes
+    if (jsonContent.type === 'say' && 
+        jsonContent.say === 'text' && 
+        jsonContent.text?.includes('<thinking>')) {
+      const thinkingContent = extractTagContent(jsonContent.text, 'thinking');
+      if (thinkingContent) {
+        return {
+          type: 'thinking',
+          content: thinkingContent,
+          metadata: { original: jsonContent.text },
+          role: 'assistant'
+        };
+      }
+    }
+
+    // In basic mode, show direct AI/user communication and thinking messages
     if (!advancedMode) {
-      if (jsonContent.type === 'say' && 
-          jsonContent.say === 'text' && 
-          !jsonContent.text?.includes('<thinking>')) {
+      if (jsonContent.type === 'say' && jsonContent.say === 'text') {
         const role = determineMessageRole(jsonContent);
         const toolInfo = extractToolInfo(jsonContent.text);
+        const thinkingContent = extractTagContent(jsonContent.text, 'thinking');
+        
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode message processed', { role });
 
         return {
-          type: 'text',
-          content: jsonContent.text,
+          type: thinkingContent ? 'thinking' : 'text',
+          content: thinkingContent || jsonContent.text,
           metadata: { 
             original: jsonContent,
             toolInfo
@@ -216,21 +231,6 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
         },
         role: 'system'
       };
-    }
-
-    // Advanced mode: Handle thinking messages
-    if (jsonContent.type === 'say' && 
-        jsonContent.say === 'text' && 
-        jsonContent.text?.includes('<thinking>')) {
-      const thinkingContent = extractTagContent(jsonContent.text, 'thinking');
-      if (thinkingContent) {
-        return {
-          type: 'thinking',
-          content: thinkingContent,
-          metadata: { original: jsonContent.text },
-          role: 'assistant'
-        };
-      }
     }
 
     // Advanced mode: Handle other messages
@@ -289,10 +289,11 @@ export const processMessageContent = (message, advancedMode = false) => {
         .join('\n');
 
       const toolInfo = extractToolInfo(textContent);
+      const thinkingContent = extractTagContent(textContent, 'thinking');
 
       return {
-        type: 'text',
-        content: textContent,
+        type: thinkingContent ? 'thinking' : 'text',
+        content: thinkingContent || textContent,
         metadata: { 
           original: message,
           toolInfo
@@ -320,24 +321,24 @@ export const processMessageContent = (message, advancedMode = false) => {
     const text = String(message);
     if (!text.trim()) return null;
 
-    // Extract tool info before cleaning text
+    // Extract tool info and thinking content before cleaning text
     const toolInfo = extractToolInfo(text);
+    const thinkingContent = extractTagContent(text, 'thinking');
 
-    // In basic mode, only show clean text without any tags
+    // In basic mode, show clean text and thinking content
     if (!advancedMode) {
-      // Remove all system tags and keep only conversational content
+      // Remove all system tags except thinking
       const cleanedText = text
         .replace(/<environment_details>.*?<\/environment_details>/s, '')
         .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
         .replace(/<task>.*?<\/task>/s, '')
-        .replace(/<thinking>.*?<\/thinking>/s, '')
         .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
         .trim();
 
       if (cleanedText) {
         return {
-          type: 'text',
-          content: cleanedText,
+          type: thinkingContent ? 'thinking' : 'text',
+          content: thinkingContent || cleanedText,
           metadata: { 
             original: text,
             toolInfo
@@ -349,7 +350,6 @@ export const processMessageContent = (message, advancedMode = false) => {
     }
 
     // Advanced mode: Process all message types with detailed formatting
-    const thinkingContent = extractTagContent(text, 'thinking');
     if (thinkingContent) {
       return {
         type: 'thinking',
