@@ -14,41 +14,37 @@ const ROLE_CONFIG = {
     icon: '🤖',
     name: 'Kodu'
   },
-  'dev manager': {
-    icon: '👨‍💻',
-    name: null
+  system: {
+    icon: '⚙️',
+    name: 'System'
   }
 };
 
 const MessageBubble = ({ 
   text, 
   timestamp, 
-  role = 'user',
+  role = 'assistant',
+  type = 'text',
   showTimestamp = true,
   isError = false,
   errorText = null,
-  messageType = 'text'
+  metadata = {}
 }) => {
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering message bubble', {
       role,
+      type,
       isError,
       hasTimestamp: !!timestamp,
-      textLength: text?.length,
-      messageType
+      textLength: text?.length
     });
-  }, [text, timestamp, role, isError, messageType]);
+  }, [text, timestamp, role, type, isError]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return '';
     try {
       const date = new Date(timestamp);
-      const formatted = date.toLocaleString();
-      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Formatted timestamp', {
-        raw: timestamp,
-        formatted
-      });
-      return formatted;
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch (error) {
       debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error formatting timestamp', {
         timestamp,
@@ -58,24 +54,7 @@ const MessageBubble = ({
     }
   }, [timestamp]);
 
-  const getMessageTypeStyle = (text, type) => {
-    if (text?.startsWith('Tool:')) {
-      return 'bg-purple-100 text-purple-900 border border-purple-200';
-    }
-    
-    switch (type) {
-      case 'system':
-        return 'bg-gray-100 text-gray-800 border border-gray-200';
-      case 'error':
-        return 'bg-red-100 text-red-900 border-2 border-red-300';
-      case 'json':
-        return 'bg-blue-50 text-blue-900 border border-blue-200 font-mono text-sm';
-      default:
-        return '';
-    }
-  };
-
-  const bubbleClasses = useMemo(() => {
+  const getTypeStyles = () => {
     const baseClasses = [
       'p-3',
       'rounded-lg',
@@ -86,38 +65,51 @@ const MessageBubble = ({
     ];
 
     // Role-based styling
-    switch (role) {
-      case 'assistant':
-        baseClasses.push('bg-gray-200', 'text-gray-900');
-        break;
-      case 'dev manager':
-        baseClasses.push('bg-blue-100', 'text-blue-900');
-        break;
-      case 'user':
-      default:
-        baseClasses.push('bg-blue-100', 'text-blue-900');
+    const isUser = role === 'user';
+    if (isUser) {
+      baseClasses.push('bg-blue-600', 'text-white', 'ml-auto');
+    } else if (role === 'assistant') {
+      baseClasses.push('bg-gray-100', 'text-gray-900', 'mr-auto');
+    } else {
+      baseClasses.push('bg-gray-50', 'text-gray-600', 'mx-auto', 'max-w-full', 'text-sm');
     }
 
-    // Message type styling
-    const typeStyle = getMessageTypeStyle(text, messageType);
-    if (typeStyle) {
-      baseClasses.push(typeStyle);
+    // Type-specific styling
+    switch (type) {
+      case 'question':
+        if (!isUser) {
+          baseClasses.push('bg-blue-50', 'text-blue-900', 'border', 'border-blue-100');
+        }
+        break;
+      case 'thinking':
+        baseClasses.push('bg-gray-50', 'text-gray-700', 'italic', 'border', 'border-gray-200', 'max-w-full');
+        break;
+      case 'api_request':
+        baseClasses.push('font-mono', 'text-xs', 'bg-gray-50', 'border', 'border-gray-200');
+        break;
+      case 'tool_response':
+        baseClasses.push('bg-green-50', 'text-green-900', 'border', 'border-green-200');
+        break;
+      case 'system':
+        baseClasses.push('bg-gray-50', 'text-gray-600', 'border', 'border-gray-200');
+        break;
     }
 
     // Error state
     if (isError) {
-      baseClasses.push('bg-red-100', 'text-red-900', 'border-2', 'border-red-300');
+      baseClasses.push('bg-red-50', 'text-red-900', 'border-2', 'border-red-300');
     }
 
     return baseClasses.join(' ');
-  }, [role, isError, text, messageType]);
+  };
 
   const containerClasses = useMemo(() => {
     const isUserMessage = role === 'user';
-    return `mb-3 ${isUserMessage ? 'text-right' : 'text-left'}`;
+    const isSystem = role === 'system';
+    return `mb-3 ${isUserMessage ? 'text-right' : isSystem ? 'text-center' : 'text-left'}`;
   }, [role]);
 
-  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.user;
+  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.assistant;
 
   const renderContent = () => {
     if (isError && errorText) {
@@ -131,15 +123,6 @@ const MessageBubble = ({
       );
     }
 
-    if (messageType === 'json') {
-      try {
-        const formattedJson = JSON.stringify(JSON.parse(text), null, 2);
-        return <pre className="overflow-x-auto">{formattedJson}</pre>;
-      } catch {
-        return text;
-      }
-    }
-
     return text;
   };
 
@@ -151,19 +134,19 @@ const MessageBubble = ({
         </div>
       )}
       <div className="flex items-start gap-2">
-        {role !== 'user' && (
-          <div className="flex items-center gap-1" title={role}>
+        {role !== 'user' && role !== 'system' && (
+          <div className="flex items-center gap-1 mt-1" title={role}>
             <span className="text-lg">{roleConfig.icon}</span>
             {roleConfig.name && (
               <span className="text-sm font-medium text-gray-700">{roleConfig.name}</span>
             )}
           </div>
         )}
-        <div className={bubbleClasses}>
+        <div className={getTypeStyles()}>
           {renderContent()}
         </div>
         {role === 'user' && (
-          <div className="flex items-center gap-1" title={role}>
+          <div className="flex items-center gap-1 mt-1" title={role}>
             {roleConfig.name && (
               <span className="text-sm font-medium text-gray-700">{roleConfig.name}</span>
             )}
@@ -178,11 +161,12 @@ const MessageBubble = ({
 MessageBubble.propTypes = {
   text: PropTypes.string.isRequired,
   timestamp: PropTypes.number,
-  role: PropTypes.oneOf(['user', 'assistant', 'dev manager']),
+  role: PropTypes.oneOf(['user', 'assistant', 'system']),
+  type: PropTypes.oneOf(['text', 'thinking', 'question', 'api_request', 'tool_response', 'system']),
   showTimestamp: PropTypes.bool,
   isError: PropTypes.bool,
   errorText: PropTypes.string,
-  messageType: PropTypes.oneOf(['text', 'system', 'error', 'json'])
+  metadata: PropTypes.object
 };
 
 export default MessageBubble;

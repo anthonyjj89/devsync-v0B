@@ -1,59 +1,42 @@
 import PropTypes from 'prop-types';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import { processMessageContent, groupMessages, shouldShowTimestamp } from '../utils/messageProcessor';
 
 const COMPONENT = 'MessageList';
 
-const cleanText = (text) => {
-  if (!text) return null;
-  
-  try {
-    // Check if the text is JSON
-    const jsonContent = JSON.parse(text);
-    
-    // Extract relevant content based on message type
-    if (jsonContent.tool) {
-      return `Tool: ${jsonContent.tool}`;
-    }
-    if (jsonContent.request) {
-      return jsonContent.request.messages?.[0]?.content?.text || null;
-    }
-    if (jsonContent.question) {
-      return jsonContent.question;
-    }
-    
-    // Return stringified JSON if no specific handling
-    return JSON.stringify(jsonContent, null, 2);
-  } catch (e) {
-    // If not JSON, proceed with normal text cleaning
-    return text
-      .replace(/<environment_details>.*?<\/environment_details>/s, '')
-      .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
-      .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
-      .replace(/<thinking>.*?<\/thinking>/s, '')
-      .trim();
-  }
+const MessageGroup = ({ group }) => {
+  return (
+    <div className="mb-6 last:mb-0">
+      {group.messages.map((message, index) => (
+        <MessageBubble
+          key={`${group.id}-${index}`}
+          {...message}
+          showTimestamp={shouldShowTimestamp(message, index, group.messages)}
+        />
+      ))}
+    </div>
+  );
 };
 
-const groupMessages = (messages) => {
-  const grouped = [];
-  let lastRole = null;
-
-  messages.forEach((msg) => {
-    if (msg.role !== lastRole) {
-      grouped.push({ ...msg, showTimestamp: true });
-      lastRole = msg.role;
-    } else {
-      grouped.push({ ...msg, showTimestamp: false });
-    }
-  });
-
-  return grouped;
+MessageGroup.propTypes = {
+  group: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    messages: PropTypes.arrayOf(PropTypes.shape({
+      role: PropTypes.string,
+      text: PropTypes.string,
+      timestamp: PropTypes.number,
+      type: PropTypes.string,
+      metadata: PropTypes.object
+    })),
+    timestamp: PropTypes.number
+  }).isRequired
 };
 
-const MessageList = ({ messages = [], showRawContent = false }) => {
+const MessageList = ({ messages = [] }) => {
   const messagesEndRef = useRef(null);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -63,9 +46,9 @@ const MessageList = ({ messages = [], showRawContent = false }) => {
     scrollToBottom();
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Rendering messages', {
       messageCount: messages.length,
-      showRawContent
+      advancedMode
     });
-  }, [messages, showRawContent]);
+  }, [messages, advancedMode]);
 
   const processMessage = (message) => {
     if (!message) {
@@ -75,28 +58,36 @@ const MessageList = ({ messages = [], showRawContent = false }) => {
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message', { 
       rawMessage: message,
-      showRawContent
+      advancedMode
     });
 
-    // Extract core message properties
-    const role = message.role || 'user';
-    const timestamp = message.timestamp || Date.now();
-
-    // Use raw content if showRawContent is true, otherwise use filtered text
-    const text = showRawContent ? message.rawContent : message.text;
-
+    // Process the message content
+    const text = message.text;
     if (!text) {
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Skipping empty or invalid message');
       return null;
     }
 
+    const processedContent = processMessageContent(text, advancedMode);
+    if (!processedContent) return null;
+
+    // Determine the role based on message type and content
+    let role = message.role || 'assistant';
+    
+    // Override role if the processed content indicates it's a user message
+    if (processedContent.role === 'user' || 
+        (message.type === 'say' && message.say === 'user_feedback')) {
+      role = 'user';
+    }
+
     const processedMessage = {
-      text: cleanText(text),
-      timestamp,
+      text: processedContent.content,
+      timestamp: message.timestamp || Date.now(),
       role,
+      type: processedContent.type,
+      metadata: processedContent.metadata,
       isError: message.isError || false,
-      errorText: message.errorText,
-      messageType: message.messageType || 'text'
+      errorText: message.errorText
     };
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processed message', {
@@ -110,26 +101,45 @@ const MessageList = ({ messages = [], showRawContent = false }) => {
     .map(processMessage)
     .filter(Boolean);
 
-  const groupedMessages = groupMessages(processedMessages);
+  const messageGroups = groupMessages(processedMessages);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-6 space-y-4">
-        {groupedMessages.length > 0 ? (
-          groupedMessages.map((message, index) => {
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Rendering message ${index}`, {
-              messageIndex: index,
-              role: message.role
-            });
-
-            return (
-              <MessageBubble
-                key={index}
-                {...message}
-                showTimestamp={message.showTimestamp}
+      {/* Header with Advanced Mode Toggle */}
+      <div className="flex items-center justify-between px-4 py-2 border-b">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Messages</h2>
+          <span className="text-sm text-gray-500">({messages.length})</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Advanced</span>
+            <button
+              onClick={() => setAdvancedMode(!advancedMode)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                advancedMode ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+              title="Toggle advanced mode"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  advancedMode ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
               />
-            );
-          })
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Message Content */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-6 space-y-4">
+        {messageGroups.length > 0 ? (
+          messageGroups.map((group) => (
+            <MessageGroup
+              key={group.id}
+              group={group}
+            />
+          ))
         ) : (
           <div className="text-center text-gray-500">
             No messages to display
@@ -149,9 +159,9 @@ MessageList.propTypes = {
     timestamp: PropTypes.number,
     isError: PropTypes.bool,
     errorText: PropTypes.string,
-    messageType: PropTypes.string
-  })),
-  showRawContent: PropTypes.bool
+    type: PropTypes.string,
+    say: PropTypes.string
+  }))
 };
 
 export default MessageList;
