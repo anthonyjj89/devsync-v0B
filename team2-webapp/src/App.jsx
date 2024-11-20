@@ -32,6 +32,8 @@ function App() {
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('kodu');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedVersion, setSelectedVersion] = useState('latest');
 
   const addDebugLog = useCallback((message, data = null) => {
     const logEntry = {
@@ -137,6 +139,12 @@ function App() {
 
       addDebugLog('Starting monitoring with config:', config);
       await watcher.setBasePath(config.basePath, config.taskFolder).validatePath();
+      
+      // Set project path if available
+      if (config.projectPath) {
+        watcher.setProjectPath(config.projectPath);
+      }
+      
       await watcher.start();
       setIsMonitoring(true);
       setLastUpdated(new Date());
@@ -150,7 +158,7 @@ function App() {
     }
   };
 
-  const handlePathsUpdate = (newConfig) => {
+  const handlePathsUpdate = async (newConfig) => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Configuration updated', {
       oldConfig: monitoringConfig,
       newConfig
@@ -164,22 +172,80 @@ function App() {
       return;
     }
 
-    // Update project path in FileWatcher
-    if (fileWatcher && newConfig.projectPath) {
-      fileWatcher.setProjectPath(newConfig.projectPath);
-    }
-
-    setMonitoringConfig({
-      basePath,
-      taskFolder,
-      projectPath: newConfig.projectPath
-    });
-
+    // Stop the current watcher
     if (fileWatcher) {
       fileWatcher.stop();
       setMessages([]);
       setError('');
     }
+
+    // Update monitoring config
+    const updatedConfig = {
+      basePath,
+      taskFolder,
+      projectPath: newConfig.projectPath
+    };
+    setMonitoringConfig(updatedConfig);
+
+    // Create and initialize a new watcher
+    const newWatcher = new FileWatcher((type, data) => {
+      // ... (same callback as in useEffect)
+      const updateId = `update-${type}-${Date.now()}`;
+      debugLogger.startTimer(updateId);
+
+      try {
+        addDebugLog(`Received ${type} messages update`, data);
+        setLastUpdated(new Date());
+        
+        const processedData = data?.map(msg => {
+          const processedContent = processMessageContent(msg, advancedMode);
+          if (!processedContent) return null;
+
+          return {
+            ...msg,
+            text: processedContent.content,
+            type: processedContent.type,
+            role: processedContent.role,
+            metadata: {
+              ...processedContent.metadata,
+              source: type,
+              processedRole: processedContent.role
+            },
+            timestamp: msg.ts || Date.now()
+          };
+        }).filter(Boolean) || [];
+        
+        if (type === 'claude') {
+          setMessages(processedData);
+        }
+        
+        setError('');
+        debugLogger.endTimer(updateId, COMPONENT);
+      } catch (err) {
+        const errorMsg = `Error processing ${type} messages: ${err.message}`;
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
+        addDebugLog(errorMsg, err);
+        setError(errorMsg);
+      }
+    });
+
+    // Initialize the new watcher
+    try {
+      await initializeWatcher(newWatcher, updatedConfig);
+      setFileWatcher(newWatcher);
+    } catch (err) {
+      setError(`Failed to initialize new watcher: ${err.message}`);
+    }
+  };
+
+  const handleFileClick = (filePath, version) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File clicked', {
+      filePath,
+      version
+    });
+    setSelectedFile(filePath);
+    setSelectedVersion(version);
+    setActiveTab('files');
   };
 
   const isPathConfigured = () => {
@@ -274,6 +340,7 @@ function App() {
                   messages={messages}
                   advancedMode={advancedMode}
                   className="h-full"
+                  onFileClick={handleFileClick}
                 />
               </div>
             </div>
@@ -302,7 +369,13 @@ function App() {
             </div>
           );
         }
-        return <FileExplorer fileWatcher={fileWatcher} />;
+        return (
+          <FileExplorer 
+            fileWatcher={fileWatcher} 
+            initialFile={selectedFile}
+            initialVersion={selectedVersion}
+          />
+        );
       case 'settings':
         return <Settings onSave={handlePathsUpdate} />;
       default:

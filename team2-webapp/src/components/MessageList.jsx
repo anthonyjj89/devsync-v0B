@@ -98,13 +98,13 @@ FileActivity.propTypes = {
   }).isRequired
 };
 
-const TimelineItem = ({ item }) => {
+const TimelineItem = ({ item, onFileClick }) => {
   return (
     <div className="mb-6 last:mb-0 flex items-start">
       {/* Left side - Chat message */}
       <div className="flex-1">
         {item.type === 'chat' && (
-          <MessageBubble {...item} showTimestamp={false} />
+          <MessageBubble {...item} showTimestamp={false} onFileClick={onFileClick} />
         )}
       </div>
 
@@ -130,10 +130,11 @@ TimelineItem.propTypes = {
   item: PropTypes.shape({
     type: PropTypes.oneOf(['chat', 'file']).isRequired,
     timestamp: PropTypes.number.isRequired
-  }).isRequired
+  }).isRequired,
+  onFileClick: PropTypes.func
 };
 
-const MessageList = ({ messages = [], advancedMode = false, className = '' }) => {
+const MessageList = ({ messages = [], advancedMode = false, className = '', onFileClick }) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -197,6 +198,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '' }) =>
                 <TimelineItem
                   key={`${item.timestamp}-${index}`}
                   item={item}
+                  onFileClick={onFileClick}
                 />
               ))}
             </div>
@@ -223,7 +225,8 @@ MessageList.propTypes = {
     metadata: PropTypes.object
   })),
   advancedMode: PropTypes.bool,
-  className: PropTypes.string
+  className: PropTypes.string,
+  onFileClick: PropTypes.func
 };
 
 export default MessageList;

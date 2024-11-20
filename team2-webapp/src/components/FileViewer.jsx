@@ -15,6 +15,12 @@ const FileViewer = ({ fileWatcher, filePath, initialVersion }) => {
     loadContent();
   }, [fileWatcher, filePath, currentVersion]);
 
+  useEffect(() => {
+    if (initialVersion) {
+      setCurrentVersion(initialVersion);
+    }
+  }, [initialVersion]);
+
   const loadContent = async () => {
     if (!fileWatcher || !filePath) return;
 
@@ -101,7 +107,10 @@ const FileViewer = ({ fileWatcher, filePath, initialVersion }) => {
 FileViewer.propTypes = {
   fileWatcher: PropTypes.object,
   filePath: PropTypes.string,
-  initialVersion: PropTypes.string
+  initialVersion: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number
+  ])
 };
 
 export default FileViewer;

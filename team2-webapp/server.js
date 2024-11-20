@@ -360,6 +360,46 @@ app.get('/api/validate-path', async (req, res) => {
     }
 });
 
+// Add validate-project-path endpoint
+app.get('/api/validate-project-path', async (req, res) => {
+    const requestId = `validate-project-path-${Date.now()}`;
+    debugLogger.startTimer(requestId);
+    
+    const { path: rawPath } = req.query;
+    if (!rawPath) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing project path parameter');
+        return res.json({ success: false, error: 'Project path is required' });
+    }
+
+    const projectPath = normalizePath(rawPath);
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating project path', { projectPath });
+
+    try {
+        // Check if path exists and is accessible
+        await fs.promises.access(projectPath);
+        
+        // Check if it's a directory
+        const stats = await fs.promises.stat(projectPath);
+        if (!stats.isDirectory()) {
+            throw new Error('Path must be a directory');
+        }
+
+        const duration = debugLogger.endTimer(requestId, COMPONENT);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validation successful', {
+            projectPath,
+            durationMs: duration
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation error', error);
+        res.json({
+            success: false,
+            error: `Failed to validate project path: ${error.message}`
+        });
+    }
+});
+
 // Updated API endpoints to handle task folders
 app.get('/api/claude-messages', async (req, res) => {
     const requestId = `fetch-claude-${Date.now()}`;

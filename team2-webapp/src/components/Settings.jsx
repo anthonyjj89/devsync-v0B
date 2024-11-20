@@ -38,15 +38,31 @@ const Settings = ({ onSave }) => {
       // Load Kodu subfolders
       if (config.koduPath) {
         fileWatcher.setBasePath(config.koduPath);
-        const koduFolders = await fileWatcher.getSubfolders();
-        setKoduSubfolders(koduFolders);
+        const koduResult = await fileWatcher.getSubfolders();
+        if (koduResult.success) {
+          // Filter only directories and map to names
+          const folders = koduResult.entries
+            .filter(entry => entry.type === 'directory')
+            .map(entry => entry.name);
+          setKoduSubfolders(folders);
+        } else {
+          throw new Error(koduResult.error || 'Failed to load Kodu folders');
+        }
       }
 
       // Load Cline subfolders
       if (config.clinePath) {
         fileWatcher.setBasePath(config.clinePath);
-        const clineFolders = await fileWatcher.getSubfolders();
-        setClineSubfolders(clineFolders);
+        const clineResult = await fileWatcher.getSubfolders();
+        if (clineResult.success) {
+          // Filter only directories and map to names
+          const folders = clineResult.entries
+            .filter(entry => entry.type === 'directory')
+            .map(entry => entry.name);
+          setClineSubfolders(folders);
+        } else {
+          throw new Error(clineResult.error || 'Failed to load Cline folders');
+        }
       }
     } catch (error) {
       setError('Failed to load folders. Please check the paths and permissions.');

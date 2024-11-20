@@ -5,8 +5,8 @@ import FileViewer from './FileViewer';
 
 const COMPONENT = 'FileExplorer';
 
-const FileExplorer = ({ fileWatcher }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
+const FileExplorer = ({ fileWatcher, initialFile, initialVersion }) => {
+  const [selectedFile, setSelectedFile] = useState(initialFile);
   const [currentPath, setCurrentPath] = useState('');
   const [entries, setEntries] = useState([]);
   const [error, setError] = useState('');
@@ -15,6 +15,17 @@ const FileExplorer = ({ fileWatcher }) => {
   useEffect(() => {
     loadEntries();
   }, [fileWatcher, currentPath]);
+
+  useEffect(() => {
+    if (initialFile) {
+      // Extract directory path from initialFile
+      const lastSlashIndex = initialFile.lastIndexOf('/');
+      if (lastSlashIndex !== -1) {
+        setCurrentPath(initialFile.substring(0, lastSlashIndex));
+      }
+      setSelectedFile(initialFile);
+    }
+  }, [initialFile]);
 
   const loadEntries = async () => {
     if (!fileWatcher?.projectPath) {
@@ -149,6 +160,7 @@ const FileExplorer = ({ fileWatcher }) => {
           <FileViewer
             fileWatcher={fileWatcher}
             filePath={selectedFile}
+            initialVersion={initialVersion}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
@@ -161,7 +173,12 @@ const FileExplorer = ({ fileWatcher }) => {
 };
 
 FileExplorer.propTypes = {
-  fileWatcher: PropTypes.object
+  fileWatcher: PropTypes.object,
+  initialFile: PropTypes.string,
+  initialVersion: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number
+  ])
 };
 
 export default FileExplorer;
