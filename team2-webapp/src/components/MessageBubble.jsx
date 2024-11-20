@@ -4,11 +4,20 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageBubble';
 
-// Role-specific icons using emojis (can be replaced with actual icons)
-const ROLE_ICONS = {
-  user: '👤',
-  assistant: '🤖',
-  'dev manager': '👨‍💻'
+// Role-specific icons and names
+const ROLE_CONFIG = {
+  user: {
+    icon: '👤',
+    name: 'Kodu User'
+  },
+  assistant: {
+    icon: '🤖',
+    name: 'Kodu'
+  },
+  'dev manager': {
+    icon: '👨‍💻',
+    name: null
+  }
 };
 
 const MessageBubble = ({ 
@@ -82,6 +91,8 @@ const MessageBubble = ({
     return `mb-3 ${isUserMessage ? 'text-right' : 'text-left'}`;
   }, [role]);
 
+  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.user;
+
   return (
     <div className={containerClasses}>
       {showTimestamp && timestamp && (
@@ -91,8 +102,11 @@ const MessageBubble = ({
       )}
       <div className="flex items-start gap-2">
         {role !== 'user' && (
-          <div className="text-lg" title={role}>
-            {ROLE_ICONS[role] || '👤'}
+          <div className="flex items-center gap-1" title={role}>
+            <span className="text-lg">{roleConfig.icon}</span>
+            {roleConfig.name && (
+              <span className="text-sm font-medium text-gray-700">{roleConfig.name}</span>
+            )}
           </div>
         )}
         <div className={bubbleClasses}>
@@ -108,8 +122,11 @@ const MessageBubble = ({
           )}
         </div>
         {role === 'user' && (
-          <div className="text-lg" title={role}>
-            {ROLE_ICONS[role]}
+          <div className="flex items-center gap-1" title={role}>
+            {roleConfig.name && (
+              <span className="text-sm font-medium text-gray-700">{roleConfig.name}</span>
+            )}
+            <span className="text-lg">{roleConfig.icon}</span>
           </div>
         )}
       </div>

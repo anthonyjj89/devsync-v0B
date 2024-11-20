@@ -9,7 +9,6 @@ import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import './App.css';
 
 const COMPONENT = 'App';
-// Use a constant for path separator based on navigator.platform instead of process.platform
 const PATH_SEPARATOR = navigator.platform.toLowerCase().includes('win') ? '\\' : '/';
 
 function App() {
@@ -17,6 +16,7 @@ function App() {
   const [apiMessages, setApiMessages] = useState([]);
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [monitoringConfig, setMonitoringConfig] = useState(() => {
     const koduPath = localStorage.getItem('koduAI.path');
     const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
@@ -56,20 +56,61 @@ function App() {
 
       try {
         addDebugLog(`Received ${type} messages update`, data);
+        setLastUpdated(new Date());
+        
+        // Process messages while preserving their roles and content
+        const processedData = data?.map(msg => {
+          // Extract text from content array if present
+          let text = '';
+          if (Array.isArray(msg.content)) {
+            text = msg.content
+              .filter(item => item.type === 'text')
+              .map(item => {
+                // Extract text from task tags if present
+                if (item.text.includes('<task>')) {
+                  const taskMatch = /<task>(.*?)<\/task>/s.exec(item.text);
+                  return taskMatch ? taskMatch[1].trim() : item.text;
+                }
+                // Extract text from answer tags if present
+                if (item.text.includes('<answer>')) {
+                  const answerMatch = /<answer>(.*?)<\/answer>/s.exec(item.text);
+                  return answerMatch ? answerMatch[1].trim() : item.text;
+                }
+                // Remove environment details and other system tags
+                return item.text
+                  .replace(/<environment_details>.*?<\/environment_details>/s, '')
+                  .replace(/<most_important_context>.*?<\/most_important_context>/s, '')
+                  .replace(/<toolResponse>.*?<\/toolResponse>/s, '')
+                  .replace(/<thinking>.*?<\/thinking>/s, '')
+                  .trim();
+              })
+              .filter(Boolean)
+              .join('\n');
+          } else if (typeof msg.content === 'string') {
+            text = msg.content;
+          }
+
+          return {
+            ...msg,
+            text: text || msg.text || '',
+            role: msg.role || 'assistant',
+            timestamp: msg.ts || Date.now()
+          };
+        }) || [];
         
         if (type === 'claude') {
-          setClaudeMessages(data || []);
-          addDebugLog('Updated claude messages', data);
+          setClaudeMessages(processedData);
+          addDebugLog('Updated claude messages', processedData);
         } else if (type === 'api') {
-          setApiMessages(data || []);
-          addDebugLog('Updated api messages', data);
+          setApiMessages(processedData);
+          addDebugLog('Updated api messages', processedData);
         }
         
         setError('');
 
         const duration = debugLogger.endTimer(updateId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${type} messages update completed`, {
-          messageCount: data?.length || 0,
+          messageCount: processedData.length,
           durationMs: duration
         });
       } catch (err) {
@@ -102,6 +143,7 @@ function App() {
       await watcher.setBasePath(config.basePath, config.taskFolder).validatePath();
       await watcher.start();
       setIsMonitoring(true);
+      setLastUpdated(new Date());
       addDebugLog('Successfully started monitoring');
     } catch (err) {
       const errorMsg = `Failed to start monitoring: ${err.message}`;
@@ -180,28 +222,49 @@ function App() {
         }
 
         return (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 bg-gray-50 border-b">
-              <div className={`text-center p-3 rounded-md ${
-                error 
-                  ? 'bg-red-100 text-red-700' 
-                  : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
-              }`}>
-                {error || (isMonitoring ? `Monitoring: ${getDisplayPath()}` : 'Not monitoring any path')}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${isMonitoring ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="font-medium">
+                    {isMonitoring ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+                {lastUpdated && (
+                  <div className="text-sm text-gray-600">
+                    Last updated: {lastUpdated.toLocaleTimeString()}
+                  </div>
+                )}
+                <div 
+                  className="text-sm text-gray-600 cursor-help"
+                  title={getDisplayPath()}
+                >
+                  {monitoringConfig.taskFolder}
+                </div>
               </div>
+              {error && (
+                <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-5 p-5">
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+            <div className="flex-1 grid grid-cols-2 gap-5 p-5 min-h-0">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col min-h-0">
                 <div className="p-4 border-b bg-gray-50 font-bold">
                   Claude Messages ({claudeMessages.length})
                 </div>
-                <MessageList messages={claudeMessages} type="claude" />
+                <div className="flex-1 min-h-0">
+                  <MessageList messages={claudeMessages} type="claude" />
+                </div>
               </div>
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col min-h-0">
                 <div className="p-4 border-b bg-gray-50 font-bold">
                   API Messages ({apiMessages.length})
                 </div>
-                <MessageList messages={apiMessages} type="api" />
+                <div className="flex-1 min-h-0">
+                  <MessageList messages={apiMessages} type="api" />
+                </div>
               </div>
             </div>
           </div>

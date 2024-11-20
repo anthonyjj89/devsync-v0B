@@ -60,17 +60,10 @@ const MessageList = ({ messages = [] }) => {
 
     // Extract core message properties
     const role = message.role || 'user';
-    let text = '';
-    const timestamp = message.ts || Date.now();
+    const timestamp = message.timestamp || Date.now();
 
-    // Handle different content formats
-    if (Array.isArray(message.content)) {
-      text = message.content.map(item => cleanText(item.text)).filter(Boolean).join('\n');
-    } else if (typeof message.content === 'string') {
-      text = cleanText(message.content);
-    } else if (message.text) {
-      text = cleanText(message.text);
-    }
+    // Clean the text content
+    const text = cleanText(message.text);
 
     if (!text) {
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Skipping empty or invalid message');
@@ -97,8 +90,8 @@ const MessageList = ({ messages = [] }) => {
   const groupedMessages = groupMessages(processedMessages);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-6 space-y-4">
         {groupedMessages.length > 0 ? (
           groupedMessages.map((message, index) => {
             debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Rendering message ${index}`, {
@@ -128,14 +121,8 @@ const MessageList = ({ messages = [] }) => {
 MessageList.propTypes = {
   messages: PropTypes.arrayOf(PropTypes.shape({
     role: PropTypes.string,
-    content: PropTypes.oneOfType([
-      PropTypes.string,
-      PropTypes.arrayOf(PropTypes.shape({
-        text: PropTypes.string
-      }))
-    ]),
     text: PropTypes.string,
-    ts: PropTypes.number
+    timestamp: PropTypes.number
   }))
 };
 
