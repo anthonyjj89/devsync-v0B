@@ -80,8 +80,8 @@ const Settings = ({ onSave }) => {
 
       // Validate project path
       if (config.projectPath) {
-        fileWatcher.setBasePath(config.projectPath);
-        await fileWatcher.validatePath();
+        fileWatcher.setProjectPath(config.projectPath);
+        await fileWatcher.validateProjectPath();
       } else {
         throw new Error('Project folder path is required');
       }

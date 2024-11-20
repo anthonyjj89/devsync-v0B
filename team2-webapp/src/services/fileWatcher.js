@@ -39,17 +39,20 @@ class FileWatcher {
         return this;
     }
 
-    async getSubfolders() {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path set for getting subfolders');
-            return [];
+    async getSubfolders(currentPath = '') {
+        if (!this.projectPath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No project path set for getting subfolders');
+            return { success: false, error: 'No project path set' };
         }
 
         const getFoldersId = `get-subfolders-${Date.now()}`;
         debugLogger.startTimer(getFoldersId);
 
         try {
-            const encodedPath = encodeURIComponent(this.basePath);
+            const fullPath = currentPath 
+                ? `${this.projectPath}/${currentPath}` 
+                : this.projectPath;
+            const encodedPath = encodeURIComponent(fullPath);
             const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
                 credentials: 'include'
             });
@@ -70,17 +73,17 @@ class FileWatcher {
             }
 
             const duration = debugLogger.endTimer(getFoldersId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Subfolders retrieved successfully', {
-                folderCount: data.folders.length,
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Entries retrieved successfully', {
+                entryCount: data.entries?.length,
                 durationMs: duration
             });
 
-            return data.folders;
+            return data;
         } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get subfolders', {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get entries', {
                 error: error.message
             });
-            throw error;
+            return { success: false, error: error.message };
         }
     }
 
@@ -133,6 +136,48 @@ class FileWatcher {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation failed', {
                 basePath: this.basePath,
                 taskFolder: this.taskFolder,
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
+    async validateProjectPath() {
+        if (!this.projectPath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path not set');
+            throw new Error('Project path must be set');
+        }
+
+        const validationId = `validate-project-path-${Date.now()}`;
+        debugLogger.startTimer(validationId);
+
+        try {
+            const encodedPath = encodeURIComponent(this.projectPath);
+            const response = await fetch(
+                `http://localhost:3002/api/validate-project-path?path=${encodedPath}`,
+                { credentials: 'include' }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Project path validation failed');
+            }
+
+            const duration = debugLogger.endTimer(validationId, COMPONENT);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validated successfully', {
+                projectPath: this.projectPath,
+                durationMs: duration
+            });
+
+            return true;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation failed', {
+                projectPath: this.projectPath,
                 error: error.message
             });
             throw error;

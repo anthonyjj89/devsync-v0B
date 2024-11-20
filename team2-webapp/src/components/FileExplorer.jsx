@@ -7,34 +7,74 @@ const COMPONENT = 'FileExplorer';
 
 const FileExplorer = ({ fileWatcher }) => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [files, setFiles] = useState([]);
+  const [currentPath, setCurrentPath] = useState('');
+  const [entries, setEntries] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const loadFiles = async () => {
-      if (!fileWatcher?.projectPath) {
-        setError('No project path configured');
-        return;
+    loadEntries();
+  }, [fileWatcher, currentPath]);
+
+  const loadEntries = async () => {
+    if (!fileWatcher?.projectPath) {
+      setError('No project path configured');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loading project entries', { currentPath });
+      const response = await fileWatcher.getSubfolders(currentPath);
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load entries');
       }
+      
+      setEntries(response.entries || []);
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Entries loaded', { 
+        count: response.entries?.length,
+        currentPath
+      });
+    } catch (error) {
+      setError(`Failed to load entries: ${error.message}`);
+      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error loading entries', { error });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      setLoading(true);
-      setError('');
+  const handleEntryClick = (entry) => {
+    if (entry.type === 'directory') {
+      const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+      setCurrentPath(newPath);
+      setSelectedFile(null);
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Navigating to directory', { 
+        newPath,
+        entry 
+      });
+    } else {
+      const filePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+      setSelectedFile(filePath);
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected file', { 
+        filePath,
+        entry 
+      });
+    }
+  };
 
-      try {
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loading project files');
-        const subfolders = await fileWatcher.getSubfolders();
-        setFiles(subfolders);
-      } catch (error) {
-        setError(`Failed to load files: ${error.message}`);
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error loading files', { error });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadFiles();
-  }, [fileWatcher]);
+  const handleBackClick = () => {
+    if (!currentPath) return;
+    const lastSlashIndex = currentPath.lastIndexOf('/');
+    const newPath = lastSlashIndex === -1 ? '' : currentPath.substring(0, lastSlashIndex);
+    setCurrentPath(newPath);
+    setSelectedFile(null);
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Navigating back', { 
+      from: currentPath,
+      to: newPath 
+    });
+  };
 
   if (!fileWatcher?.projectPath) {
     return (
@@ -47,7 +87,7 @@ const FileExplorer = ({ fileWatcher }) => {
   if (loading) {
     return (
       <div className="p-4 bg-blue-100 text-blue-700 rounded">
-        Loading files...
+        Loading entries...
       </div>
     );
   }
@@ -64,21 +104,42 @@ const FileExplorer = ({ fileWatcher }) => {
     <div className="flex h-full">
       {/* File List */}
       <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
-        <h3 className="text-lg font-medium mb-4">Project Files</h3>
-        <div className="space-y-2">
-          {files.map((file) => (
+        <div className="mb-4">
+          <h3 className="text-lg font-medium">Project Files</h3>
+          {currentPath && (
             <button
-              key={file}
-              onClick={() => setSelectedFile(file)}
-              className={`w-full text-left px-3 py-2 rounded transition-colors ${
-                selectedFile === file
+              onClick={handleBackClick}
+              className="mt-2 px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded transition-colors"
+            >
+              ← Back
+            </button>
+          )}
+          <div className="mt-2 text-sm text-gray-600 truncate" title={currentPath || '/'}>
+            {currentPath || '/'}
+          </div>
+        </div>
+        <div className="space-y-1">
+          {entries.map((entry) => (
+            <button
+              key={entry.name}
+              onClick={() => handleEntryClick(entry)}
+              className={`w-full text-left px-3 py-2 rounded transition-colors flex items-center gap-2 ${
+                selectedFile === (currentPath ? `${currentPath}/${entry.name}` : entry.name)
                   ? 'bg-blue-500 text-white'
                   : 'hover:bg-gray-200'
               }`}
             >
-              {file}
+              <span className="text-lg">
+                {entry.type === 'directory' ? '📁' : '📄'}
+              </span>
+              <span className="truncate">{entry.name}</span>
             </button>
           ))}
+          {entries.length === 0 && (
+            <div className="text-center text-gray-500 py-4">
+              No files or folders found
+            </div>
+          )}
         </div>
       </div>
 

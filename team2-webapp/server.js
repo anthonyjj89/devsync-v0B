@@ -86,6 +86,39 @@ async function readMessagesFromFile(filePath) {
     }
 }
 
+// New endpoint to validate project path
+app.get('/api/validate-project-path', async (req, res) => {
+    const requestId = `validate-project-path-${Date.now()}`;
+    debugLogger.startTimer(requestId);
+    
+    const path = normalizePath(req.query.path);
+    if (!path) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided');
+        return res.json({ success: false, error: 'No path provided' });
+    }
+
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating project path', { path });
+
+    try {
+        // Check if path exists and is accessible
+        await fs.promises.access(path);
+        
+        const duration = debugLogger.endTimer(requestId, COMPONENT);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validation successful', {
+            path,
+            durationMs: duration
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation error', error);
+        res.json({
+            success: false,
+            error: `Failed to validate path: ${error.message}`
+        });
+    }
+});
+
 // New endpoint to read project files
 app.get('/api/read-project-file', async (req, res) => {
     const requestId = `read-project-file-${Date.now()}`;
@@ -106,10 +139,6 @@ app.get('/api/read-project-file', async (req, res) => {
     });
 
     try {
-        // Check if file exists and is accessible
-        await fs.promises.access(filePath);
-        
-        // Read file content
         const content = await fs.promises.readFile(filePath, 'utf8');
         
         debugLogger.logFileOperation(COMPONENT, 'READ_PROJECT_FILE', filePath, {
@@ -153,28 +182,34 @@ app.get('/api/get-subfolders', async (req, res) => {
         // Get all items in the directory
         const items = await fs.promises.readdir(basePath, { withFileTypes: true });
         
-        // Filter for directories only and get their names
-        const folders = items
-            .filter(item => item.isDirectory())
-            .map(item => item.name)
-            .sort((a, b) => b.localeCompare(a)); // Sort in descending order (newest first)
+        // Get both files and directories
+        const entries = items.map(item => ({
+            name: item.name,
+            type: item.isDirectory() ? 'directory' : 'file'
+        })).sort((a, b) => {
+            // Sort directories first, then files, both alphabetically
+            if (a.type === b.type) {
+                return a.name.localeCompare(b.name);
+            }
+            return a.type === 'directory' ? -1 : 1;
+        });
 
         const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully retrieved subfolders', {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully retrieved entries', {
             basePath,
-            folderCount: folders.length,
+            entryCount: entries.length,
             durationMs: duration
         });
 
-        res.json({ success: true, folders });
+        res.json({ success: true, entries });
     } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting subfolders', {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting entries', {
             basePath,
             error: error.message
         });
         res.json({
             success: false,
-            error: `Failed to get subfolders: ${error.message}`
+            error: `Failed to get entries: ${error.message}`
         });
     }
 });
@@ -237,12 +272,13 @@ app.get('/api/validate-path', async (req, res) => {
                 });
             }
 
-            // Set up watchers for task folder files
+            // Stop existing watcher for this path if any
             if (activeWatchers.has(basePath)) {
                 debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', { basePath });
                 activeWatchers.get(basePath).close();
             }
 
+            // Set up new watcher for this path
             const watchPaths = [
                 joinPaths(basePath, CLAUDE_MESSAGES_PATH),
                 joinPaths(basePath, API_HISTORY_PATH),
