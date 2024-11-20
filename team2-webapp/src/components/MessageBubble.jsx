@@ -4,25 +4,29 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageBubble';
 
+// Role-specific icons using emojis (can be replaced with actual icons)
+const ROLE_ICONS = {
+  user: '👤',
+  assistant: '🤖',
+  'dev manager': '👨‍💻'
+};
+
 const MessageBubble = ({ 
   text, 
   timestamp, 
-  type = 'default',
-  isSubMessage = false,
-  isFetching = false,
+  role = 'user',
+  showTimestamp = true,
   isError = false,
   errorText = null
 }) => {
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering message bubble', {
-      type,
-      isSubMessage,
-      isFetching,
+      role,
       isError,
       hasTimestamp: !!timestamp,
       textLength: text?.length
     });
-  }, [text, timestamp, type, isSubMessage, isFetching, isError]);
+  }, [text, timestamp, role, isError]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return '';
@@ -45,96 +49,79 @@ const MessageBubble = ({
 
   const bubbleClasses = useMemo(() => {
     const baseClasses = [
-      'px-4 py-3',
+      'p-2',
       'rounded-lg',
       'max-w-[80%]',
       'break-words',
-      'whitespace-pre-wrap',
-      'font-mono',
-      'text-sm',
-      'shadow-sm'
+      'whitespace-pre-wrap'
     ];
 
-    // Alignment and colors based on message type
-    if (type === 'claude') {
-      baseClasses.push('self-start', 'bg-assistant', 'text-gray-800');
-    } else {
-      baseClasses.push('self-end', 'bg-user', 'text-white');
-    }
-
-    // Sub-message styling
-    if (isSubMessage) {
-      baseClasses.push('ml-5', 'text-xs', 'opacity-80');
-    }
-
-    // Loading state
-    if (isFetching) {
-      baseClasses.push('opacity-70');
+    // Role-based styling
+    switch (role) {
+      case 'assistant':
+        baseClasses.push('bg-gray-200', 'text-gray-900');
+        break;
+      case 'dev manager':
+        baseClasses.push('bg-blue-100', 'text-blue-900');
+        break;
+      case 'user':
+      default:
+        baseClasses.push('bg-blue-100', 'text-blue-900');
     }
 
     // Error state
     if (isError) {
-      baseClasses.push('border-2', 'border-error');
+      baseClasses.push('bg-red-100', 'text-red-900', 'border', 'border-red-300');
     }
 
     return baseClasses.join(' ');
-  }, [type, isSubMessage, isFetching, isError]);
+  }, [role, isError]);
 
-  const renderContent = () => {
-    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering content', {
-      hasText: !!text,
-      hasError: isError,
-      hasErrorText: !!errorText
-    });
-
-    if (isError && errorText) {
-      return (
-        <>
-          <div className="text-error mb-1">
-            Error: {errorText}
-          </div>
-          {text && <div>{text}</div>}
-        </>
-      );
-    }
-
-    if (isFetching) {
-      return (
-        <>
-          <div className="mb-1">Loading...</div>
-          {text && <div className="opacity-70">{text}</div>}
-        </>
-      );
-    }
-
-    return text || '';
-  };
+  const containerClasses = useMemo(() => {
+    const isUserMessage = role === 'user';
+    return `mb-3 ${isUserMessage ? 'text-right' : 'text-left'}`;
+  }, [role]);
 
   return (
-    <div className="mb-3">
-      {timestamp && (
-        <div className={`
-          text-xs 
-          text-gray-500 
-          mb-1
-          ${type === 'claude' ? 'text-left' : 'text-right'}
-        `}>
+    <div className={containerClasses}>
+      {showTimestamp && timestamp && (
+        <div className="text-xs text-gray-500 mb-1">
           {formattedTimestamp}
         </div>
       )}
-      <div className={bubbleClasses}>
-        {renderContent()}
+      <div className="flex items-start gap-2">
+        {role !== 'user' && (
+          <div className="text-lg" title={role}>
+            {ROLE_ICONS[role] || '👤'}
+          </div>
+        )}
+        <div className={bubbleClasses}>
+          {isError && errorText ? (
+            <>
+              <div className="text-red-600 mb-1">
+                Error: {errorText}
+              </div>
+              {text && <div>{text}</div>}
+            </>
+          ) : (
+            text
+          )}
+        </div>
+        {role === 'user' && (
+          <div className="text-lg" title={role}>
+            {ROLE_ICONS[role]}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 MessageBubble.propTypes = {
-  text: PropTypes.string,
+  text: PropTypes.string.isRequired,
   timestamp: PropTypes.number,
-  type: PropTypes.string,
-  isSubMessage: PropTypes.bool,
-  isFetching: PropTypes.bool,
+  role: PropTypes.oneOf(['user', 'assistant', 'dev manager']),
+  showTimestamp: PropTypes.bool,
   isError: PropTypes.bool,
   errorText: PropTypes.string
 };

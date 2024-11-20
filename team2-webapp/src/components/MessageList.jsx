@@ -5,7 +5,36 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageList';
 
-const MessageList = ({ messages = [], type }) => {
+const cleanText = (text) => {
+  if (!text) return null;
+  
+  // Remove JSON structures
+  if (text.startsWith("{") && text.endsWith("}")) return null;
+
+  // Remove tool-related or thinking tags
+  return text
+    .replace(/<[^>]+>/g, "") // Remove all XML-like tags
+    .replace(/\{[^}]+\}/g, "") // Remove JSON objects
+    .trim();
+};
+
+const groupMessages = (messages) => {
+  const grouped = [];
+  let lastRole = null;
+
+  messages.forEach((msg) => {
+    if (msg.role !== lastRole) {
+      grouped.push({ ...msg, showTimestamp: true });
+      lastRole = msg.role;
+    } else {
+      grouped.push({ ...msg, showTimestamp: false });
+    }
+  });
+
+  return grouped;
+};
+
+const MessageList = ({ messages = [] }) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -14,94 +43,80 @@ const MessageList = ({ messages = [], type }) => {
 
   useEffect(() => {
     scrollToBottom();
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Rendering ${type} messages`, {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Rendering messages', {
       messageCount: messages.length
     });
-  }, [messages, type]);
+  }, [messages]);
 
   const processMessage = (message) => {
     if (!message) {
-      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Received null/undefined message', { type });
+      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Received null/undefined message');
       return null;
     }
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message', { 
-      type,
       rawMessage: message 
     });
 
-    // Extract message content based on the actual format
+    // Extract core message properties
+    const role = message.role || 'user';
     let text = '';
-    let timestamp = message.ts || null;
-    let messageType = type;
-    let isSubMessage = message.isSubMessage || false;
-    let isFetching = message.isFetching || false;
-    let isError = message.isError || false;
-    let errorText = message.errorText || null;
+    const timestamp = message.ts || Date.now();
 
-    // Handle different message types
-    if (message.text) {
-      text = message.text;
-    } else if (message.say === 'text') {
-      text = message.text;
-    } else if (message.say === 'api_req_started') {
-      text = 'API Request: ' + message.text;
-    } else if (message.say === 'user_feedback') {
-      text = 'User: ' + message.text;
+    // Handle different content formats
+    if (Array.isArray(message.content)) {
+      text = message.content.map(item => cleanText(item.text)).filter(Boolean).join('\n');
+    } else if (typeof message.content === 'string') {
+      text = cleanText(message.content);
+    } else if (message.text) {
+      text = cleanText(message.text);
     }
 
-    // For API conversation history
-    if (message.role === 'user' && Array.isArray(message.content)) {
-      text = message.content.map(item => item.text).join('\n');
-    } else if (message.role === 'assistant' && Array.isArray(message.content)) {
-      text = message.content.map(item => item.text).join('\n');
+    if (!text) {
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Skipping empty or invalid message');
+      return null;
     }
 
     const processedMessage = {
       text,
       timestamp,
-      type: messageType,
-      isSubMessage,
-      isFetching,
-      isError,
-      errorText
+      role
     };
 
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processed message', {
-      type,
       processedMessage
     });
 
     return processedMessage;
   };
 
+  const processedMessages = messages
+    .map(processMessage)
+    .filter(Boolean);
+
+  const groupedMessages = groupMessages(processedMessages);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-        {Array.isArray(messages) && messages.length > 0 ? (
-          messages.map((message, index) => {
-            const processedMessage = processMessage(message);
-            if (!processedMessage || !processedMessage.text) return null;
-            
+        {groupedMessages.length > 0 ? (
+          groupedMessages.map((message, index) => {
             debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Rendering message ${index}`, {
-              type,
               messageIndex: index,
-              messageType: processedMessage.type
+              role: message.role
             });
 
             return (
               <MessageBubble
                 key={index}
-                {...processedMessage}
+                {...message}
+                showTimestamp={message.showTimestamp}
               />
             );
           })
         ) : (
           <div className="text-center text-gray-500">
-            {(() => {
-              debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'No messages to display', { type });
-              return 'No messages to display';
-            })()}
+            No messages to display
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -112,18 +127,16 @@ const MessageList = ({ messages = [], type }) => {
 
 MessageList.propTypes = {
   messages: PropTypes.arrayOf(PropTypes.shape({
-    ts: PropTypes.number,
-    type: PropTypes.string,
-    say: PropTypes.string,
-    text: PropTypes.string,
     role: PropTypes.string,
-    content: PropTypes.array,
-    isSubMessage: PropTypes.bool,
-    isFetching: PropTypes.bool,
-    isError: PropTypes.bool,
-    errorText: PropTypes.string
-  })),
-  type: PropTypes.string
+    content: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.arrayOf(PropTypes.shape({
+        text: PropTypes.string
+      }))
+    ]),
+    text: PropTypes.string,
+    ts: PropTypes.number
+  }))
 };
 
 export default MessageList;
