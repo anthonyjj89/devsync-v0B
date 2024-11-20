@@ -4,30 +4,25 @@ import MessageList from './components/MessageList';
 import PathInput from './components/PathInput';
 import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
+import Settings from './components/Settings';
+import Sidebar from './components/Sidebar';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import './App.css';
 
 const COMPONENT = 'App';
-
-// Default path for monitoring VSCode extension files
-const DEFAULT_PATH = 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks/1732044487428';
-
-const ROLES = {
-  DEFAULT: 'default',
-  DEV_MANAGER: 'dev_manager',
-  PROJECT_OWNER: 'project_owner'
-};
 
 function App() {
   const [claudeMessages, setClaudeMessages] = useState([]);
   const [apiMessages, setApiMessages] = useState([]);
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [monitoringPath, setMonitoringPath] = useState(DEFAULT_PATH);
+  const [monitoringPath, setMonitoringPath] = useState(
+    localStorage.getItem('koduPath') || 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks'
+  );
   const [error, setError] = useState('');
   const [showDebug, setShowDebug] = useState(true);
   const [debugLogs, setDebugLogs] = useState([]);
-  const [currentRole, setCurrentRole] = useState(ROLES.DEFAULT);
+  const [activeTab, setActiveTab] = useState('kodu');
 
   const addDebugLog = useCallback((message, data = null) => {
     const logEntry = {
@@ -80,14 +75,14 @@ function App() {
     });
 
     setFileWatcher(watcher);
-    initializeWatcher(watcher, DEFAULT_PATH);
+    initializeWatcher(watcher, monitoringPath);
 
     return () => {
       if (watcher) {
         watcher.stop();
       }
     };
-  }, [addDebugLog]);
+  }, [addDebugLog, monitoringPath]);
 
   const initializeWatcher = async (watcher, path) => {
     try {
@@ -126,98 +121,97 @@ function App() {
     }
   };
 
+  const handlePathsUpdate = (newPaths) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Paths updated', {
+      oldPath: monitoringPath,
+      newPath: newPaths[activeTab]
+    });
+    setMonitoringPath(newPaths[activeTab]);
+  };
+
   const renderContent = () => {
-    switch (currentRole) {
-      case ROLES.DEV_MANAGER:
-        return <DevManagerDashboard messages={claudeMessages} />;
-      case ROLES.PROJECT_OWNER:
-        return <ProjectOwnerDashboard messages={claudeMessages} />;
-      default:
+    switch (activeTab) {
+      case 'kodu':
+      case 'cline':
         return (
-          <div className="grid grid-cols-2 gap-5 h-[calc(100vh-200px)]">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-gray-50 font-bold">
-                Claude Messages ({claudeMessages.length})
+          <div className="flex-1 overflow-hidden">
+            <div className="p-4 bg-gray-50 border-b">
+              <PathInput onPathValidated={handlePathValidated} />
+              <div className={`text-center p-3 mt-2 rounded-md ${
+                error 
+                  ? 'bg-red-100 text-red-700' 
+                  : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
+              }`}>
+                {error || (isMonitoring ? `Monitoring: ${monitoringPath}` : 'Enter path to start monitoring')}
               </div>
-              <MessageList messages={claudeMessages} type="claude" />
             </div>
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-gray-50 font-bold">
-                API Messages ({apiMessages.length})
+            <div className="grid grid-cols-2 gap-5 p-5">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+                <div className="p-4 border-b bg-gray-50 font-bold">
+                  Claude Messages ({claudeMessages.length})
+                </div>
+                <MessageList messages={claudeMessages} type="claude" />
               </div>
-              <MessageList messages={apiMessages} type="api" />
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+                <div className="p-4 border-b bg-gray-50 font-bold">
+                  API Messages ({apiMessages.length})
+                </div>
+                <MessageList messages={apiMessages} type="api" />
+              </div>
             </div>
           </div>
         );
+      case 'dev-manager':
+        return <DevManagerDashboard messages={claudeMessages} />;
+      case 'project-manager':
+        return <ProjectOwnerDashboard messages={claudeMessages} />;
+      case 'settings':
+        return <Settings onSave={handlePathsUpdate} />;
+      default:
+        return null;
     }
   };
-
-  const statusText = error 
-    ? error 
-    : (isMonitoring 
-      ? `Monitoring: ${monitoringPath}` 
-      : 'Enter path to start monitoring');
 
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering App', {
     isMonitoring,
     hasError: !!error,
     claudeMessagesCount: claudeMessages.length,
     apiMessagesCount: apiMessages.length,
-    debugLogsCount: debugLogs.length
+    debugLogsCount: debugLogs.length,
+    activeTab
   });
 
   return (
-    <div className="min-h-screen bg-gray-100 p-5">
-      {/* Role Selector */}
-      <div className="mb-4 flex gap-2">
-        {Object.values(ROLES).map(role => (
-          <button
-            key={role}
-            onClick={() => setCurrentRole(role)}
-            className={`px-4 py-2 rounded-md ${
-              currentRole === role
-                ? 'bg-blue-500 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            {role.replace('_', ' ').toUpperCase()}
-          </button>
-        ))}
-      </div>
+    <div className="flex h-screen bg-gray-100">
+      <Sidebar 
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {renderContent()}
 
-      <PathInput onPathValidated={handlePathValidated} />
-      
-      <div className={`text-center p-3 mb-4 rounded-md ${
-        error 
-          ? 'bg-red-100 text-red-700' 
-          : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
-      }`}>
-        {statusText}
-      </div>
+        <button 
+          onClick={() => setShowDebug(!showDebug)}
+          className={`m-4 px-4 py-2 rounded-md ${
+            showDebug ? 'bg-red-500' : 'bg-green-500'
+          } text-white self-end`}
+        >
+          {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
+        </button>
 
-      <button 
-        onClick={() => setShowDebug(!showDebug)}
-        className={`mb-4 px-4 py-2 rounded-md ${
-          showDebug ? 'bg-red-500' : 'bg-green-500'
-        } text-white`}
-      >
-        {showDebug ? 'Hide Debug Panel' : 'Show Debug Panel'}
-      </button>
-
-      {renderContent()}
-
-      {showDebug && (
-        <div className="mt-5 bg-gray-900 text-white p-4 h-48 overflow-y-auto rounded-lg font-mono text-sm">
-          {debugLogs.map((log, index) => (
-            <div key={index} className="mb-1 whitespace-pre-wrap">
-              [{log.timestamp}] {log.message}
-              {log.data && (
-                <pre className="text-xs text-gray-400">{log.data}</pre>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+        {showDebug && (
+          <div className="m-4 bg-gray-900 text-white p-4 h-48 overflow-y-auto rounded-lg font-mono text-sm">
+            {debugLogs.map((log, index) => (
+              <div key={index} className="mb-1 whitespace-pre-wrap">
+                [{log.timestamp}] {log.message}
+                {log.data && (
+                  <pre className="text-xs text-gray-400">{log.data}</pre>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
