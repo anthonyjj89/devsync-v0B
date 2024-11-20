@@ -108,9 +108,12 @@ const TimelineItem = ({ item }) => {
         )}
       </div>
 
-      {/* Middle - Timestamp */}
-      <div className="w-24 text-center text-xs text-gray-500 px-2 flex-shrink-0">
-        {new Date(item.timestamp).toLocaleTimeString()}
+      {/* Middle - Timeline dot and timestamp */}
+      <div className="w-24 flex-shrink-0 flex flex-col items-center">
+        <div className="w-3 h-3 bg-blue-500 rounded-full relative z-10" />
+        <div className="mt-1 px-2 text-xs text-gray-500 bg-white relative z-10">
+          {new Date(item.timestamp).toLocaleTimeString()}
+        </div>
       </div>
 
       {/* Right side - File activity */}
@@ -165,7 +168,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '' }) =>
       acc.push({
         timestamp: message.timestamp,
         type: 'file',
-        tool: toolInfo.tool, // Pass the tool type directly
+        tool: toolInfo.tool,
         path: toolInfo.path || toolInfo.filePath,
         status: toolInfo.toolStatus || 'unknown',
         error: toolInfo.error,
@@ -184,14 +187,19 @@ const MessageList = ({ messages = [], advancedMode = false, className = '' }) =>
         <h2 className="font-bold text-lg">Activity Timeline</h2>
       </div>
       <div className="h-full overflow-y-auto synchronized-scroll">
-        <div className="px-4 py-6 space-y-4">
+        <div className="px-4 py-6 relative">
+          {/* Continuous vertical timeline line */}
+          <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-blue-200 transform -translate-x-1/2" />
+          
           {timelineItems.length > 0 ? (
-            timelineItems.map((item, index) => (
-              <TimelineItem
-                key={`${item.timestamp}-${index}`}
-                item={item}
-              />
-            ))
+            <div className="space-y-6 relative">
+              {timelineItems.map((item, index) => (
+                <TimelineItem
+                  key={`${item.timestamp}-${index}`}
+                  item={item}
+                />
+              ))}
+            </div>
           ) : (
             <div className="text-center text-gray-500">
               No activity to display
