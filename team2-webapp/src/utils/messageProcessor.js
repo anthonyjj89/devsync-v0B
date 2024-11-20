@@ -27,7 +27,7 @@ const extractTagContent = (text, tagName) => {
  * Extracts tool information from message content
  */
 const extractToolInfo = (text) => {
-  const toolTags = ['read_file', 'write_to_file', 'list_files', 'search_files'];
+  const toolTags = ['read_file', 'write_to_file', 'list_files', 'search_files', 'saveClaudeMessages'];
   let toolInfo = null;
 
   for (const tag of toolTags) {
@@ -156,6 +156,14 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
           };
         }
         
+        // Always include tool info in metadata, regardless of mode
+        const toolInfo = {
+          tool: toolData.tool,
+          path: toolData.path,
+          filePath: toolData.filePath,
+          content: toolData.content
+        };
+
         // In advanced mode, show the full tool request
         if (advancedMode) {
           return {
@@ -164,16 +172,19 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
             metadata: { 
               tool: toolData.tool,
               isToolRequest: true,
-              toolInfo: {
-                tool: toolData.tool,
-                path: toolData.path,
-                filePath: toolData.filePath,
-                content: toolData.content
-              }
+              toolInfo
             },
             role: 'system'
           };
         }
+
+        // In basic mode, just include the tool info in metadata
+        return {
+          type: 'text',
+          content: '',
+          metadata: { toolInfo },
+          role: 'system'
+        };
       } catch (e) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error parsing tool message', {
           error: e.message,
@@ -187,11 +198,15 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
         jsonContent.say === 'text' && 
         jsonContent.text?.includes('<thinking>')) {
       const thinkingContent = extractTagContent(jsonContent.text, 'thinking');
+      const toolInfo = extractToolInfo(jsonContent.text);
       if (thinkingContent) {
         return {
           type: 'thinking',
           content: thinkingContent,
-          metadata: { original: jsonContent.text },
+          metadata: { 
+            original: jsonContent.text,
+            toolInfo
+          },
           role: 'assistant'
         };
       }
