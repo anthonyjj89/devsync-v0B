@@ -67,6 +67,12 @@
 - Smooth transitions
 - Clear visual hierarchy
 
+### File Explorer
+- Manual refresh button for project files list
+- Refresh icon with hover effects
+- Loading state indication
+- Instant file list updates
+
 ## 4. Technical Features
 
 ### State Management
@@ -86,6 +92,10 @@
    - Real-time subfolder detection
    - Automatic path validation
    - File watching improvements
+   - Immediate file explorer updates when project path changes (implemented)
+     - Added fileWatcher.projectPath dependency to FileExplorer component
+     - Files list now updates instantly on settings save without page refresh
+     - Added manual refresh button as backup option
 
 2. UI Enhancements
    - Dark mode support

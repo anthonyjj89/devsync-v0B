@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 import FileViewer from './FileViewer';
@@ -11,23 +11,20 @@ const FileExplorer = ({ fileWatcher, initialFile, initialVersion }) => {
   const [entries, setEntries] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [watcherPath, setWatcherPath] = useState(fileWatcher?.projectPath);
 
+  // Update watcherPath when fileWatcher.projectPath changes
   useEffect(() => {
-    loadEntries();
-  }, [fileWatcher, currentPath]);
-
-  useEffect(() => {
-    if (initialFile) {
-      // Extract directory path from initialFile
-      const lastSlashIndex = initialFile.lastIndexOf('/');
-      if (lastSlashIndex !== -1) {
-        setCurrentPath(initialFile.substring(0, lastSlashIndex));
-      }
-      setSelectedFile(initialFile);
+    if (fileWatcher?.projectPath !== watcherPath) {
+      setWatcherPath(fileWatcher?.projectPath);
+      // Reset state when project path changes
+      setCurrentPath('');
+      setSelectedFile(null);
+      setEntries([]);
     }
-  }, [initialFile]);
+  }, [fileWatcher?.projectPath, watcherPath]);
 
-  const loadEntries = async () => {
+  const loadEntries = useCallback(async () => {
     if (!fileWatcher?.projectPath) {
       setError('No project path configured');
       return;
@@ -54,7 +51,25 @@ const FileExplorer = ({ fileWatcher, initialFile, initialVersion }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fileWatcher, currentPath]);
+
+  // Load entries when path changes or watcher path changes
+  useEffect(() => {
+    if (watcherPath) {
+      loadEntries();
+    }
+  }, [loadEntries, watcherPath]);
+
+  // Effect to handle initialFile changes
+  useEffect(() => {
+    if (initialFile) {
+      const lastSlashIndex = initialFile.lastIndexOf('/');
+      if (lastSlashIndex !== -1) {
+        setCurrentPath(initialFile.substring(0, lastSlashIndex));
+      }
+      setSelectedFile(initialFile);
+    }
+  }, [initialFile]);
 
   const handleEntryClick = (entry) => {
     if (entry.type === 'directory') {
@@ -116,7 +131,19 @@ const FileExplorer = ({ fileWatcher, initialFile, initialVersion }) => {
       {/* File List */}
       <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
         <div className="mb-4">
-          <h3 className="text-lg font-medium">Project Files</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium">Project Files</h3>
+            <button
+              onClick={loadEntries}
+              className="p-1 hover:bg-gray-200 rounded transition-colors"
+              title="Refresh files"
+              disabled={loading}
+            >
+              <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
           {currentPath && (
             <button
               onClick={handleBackClick}

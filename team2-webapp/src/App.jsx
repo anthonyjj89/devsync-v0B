@@ -52,10 +52,8 @@ function App() {
     });
   }, []);
 
-  useEffect(() => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing App');
-
-    const watcher = new FileWatcher((type, data) => {
+  const createFileWatcher = useCallback(() => {
+    return new FileWatcher((type, data) => {
       const updateId = `update-${type}-${Date.now()}`;
       debugLogger.startTimer(updateId);
 
@@ -63,13 +61,10 @@ function App() {
         addDebugLog(`Received ${type} messages update`, data);
         setLastUpdated(new Date());
         
-        // Process messages using our enhanced processor
         const processedData = data?.map(msg => {
-          // Pass the entire message object to processMessageContent
           const processedContent = processMessageContent(msg, advancedMode);
           if (!processedContent) return null;
 
-          // Log the message processing for debugging
           debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing message', {
             originalMessage: msg,
             processedContent,
@@ -84,7 +79,7 @@ function App() {
             metadata: {
               ...processedContent.metadata,
               source: type,
-              processedRole: processedContent.role // For debugging
+              processedRole: processedContent.role
             },
             timestamp: msg.ts || Date.now()
           };
@@ -113,6 +108,12 @@ function App() {
         setError(errorMsg);
       }
     });
+  }, [addDebugLog, advancedMode]);
+
+  useEffect(() => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing App');
+
+    const watcher = createFileWatcher();
 
     // Set project path if available
     if (monitoringConfig.projectPath) {
@@ -129,7 +130,7 @@ function App() {
         watcher.stop();
       }
     };
-  }, [addDebugLog, monitoringConfig, advancedMode]);
+  }, [createFileWatcher]);
 
   const initializeWatcher = async (watcher, config) => {
     try {
@@ -179,6 +180,15 @@ function App() {
       setError('');
     }
 
+    // Create new watcher and set project path immediately
+    const newWatcher = createFileWatcher();
+    if (newConfig.projectPath) {
+      newWatcher.setProjectPath(newConfig.projectPath);
+    }
+    
+    // Set the watcher first so components can use it
+    setFileWatcher(newWatcher);
+
     // Update monitoring config
     const updatedConfig = {
       basePath,
@@ -187,52 +197,9 @@ function App() {
     };
     setMonitoringConfig(updatedConfig);
 
-    // Create and initialize a new watcher
-    const newWatcher = new FileWatcher((type, data) => {
-      // ... (same callback as in useEffect)
-      const updateId = `update-${type}-${Date.now()}`;
-      debugLogger.startTimer(updateId);
-
-      try {
-        addDebugLog(`Received ${type} messages update`, data);
-        setLastUpdated(new Date());
-        
-        const processedData = data?.map(msg => {
-          const processedContent = processMessageContent(msg, advancedMode);
-          if (!processedContent) return null;
-
-          return {
-            ...msg,
-            text: processedContent.content,
-            type: processedContent.type,
-            role: processedContent.role,
-            metadata: {
-              ...processedContent.metadata,
-              source: type,
-              processedRole: processedContent.role
-            },
-            timestamp: msg.ts || Date.now()
-          };
-        }).filter(Boolean) || [];
-        
-        if (type === 'claude') {
-          setMessages(processedData);
-        }
-        
-        setError('');
-        debugLogger.endTimer(updateId, COMPONENT);
-      } catch (err) {
-        const errorMsg = `Error processing ${type} messages: ${err.message}`;
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
-        addDebugLog(errorMsg, err);
-        setError(errorMsg);
-      }
-    });
-
-    // Initialize the new watcher
+    // Initialize the watcher
     try {
       await initializeWatcher(newWatcher, updatedConfig);
-      setFileWatcher(newWatcher);
     } catch (err) {
       setError(`Failed to initialize new watcher: ${err.message}`);
     }
