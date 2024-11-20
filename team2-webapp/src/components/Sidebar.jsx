@@ -9,6 +9,7 @@ const tabs = [
   { id: 'cline', label: 'Cline AI Dev', icon: '💻' },
   { id: 'dev-manager', label: 'Dev Manager', icon: '👨‍💻' },
   { id: 'project-manager', label: 'Project Manager', icon: '📋' },
+  { id: 'files', label: 'Project Files', icon: '📁' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ];
 

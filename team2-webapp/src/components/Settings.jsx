@@ -13,6 +13,7 @@ const Settings = ({ onSave }) => {
     clinePath: localStorage.getItem('clineAI.path') || 'C:\\Users\\antho\\AppData\\Roaming\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\tasks',
     koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
     clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
+    projectPath: localStorage.getItem('project.path') || '',
     enabledAIs: {
       kodu: localStorage.getItem('koduAI.enabled') !== 'false',
       cline: localStorage.getItem('clineAI.enabled') !== 'false'
@@ -77,6 +78,14 @@ const Settings = ({ onSave }) => {
         await fileWatcher.validatePath();
       }
 
+      // Validate project path
+      if (config.projectPath) {
+        fileWatcher.setBasePath(config.projectPath);
+        await fileWatcher.validatePath();
+      } else {
+        throw new Error('Project folder path is required');
+      }
+
       return true;
     } catch (error) {
       throw new Error(`Configuration validation failed: ${error.message}`);
@@ -101,6 +110,7 @@ const Settings = ({ onSave }) => {
       localStorage.setItem('clineAI.taskFolder', config.clineTaskFolder);
       localStorage.setItem('koduAI.enabled', config.enabledAIs.kodu);
       localStorage.setItem('clineAI.enabled', config.enabledAIs.cline);
+      localStorage.setItem('project.path', config.projectPath);
 
       onSave(config);
     } catch (error) {
@@ -117,6 +127,7 @@ const Settings = ({ onSave }) => {
       clinePath: 'C:\\Users\\antho\\AppData\\Roaming\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\tasks',
       koduTaskFolder: '',
       clineTaskFolder: '',
+      projectPath: '',
       enabledAIs: {
         kodu: true,
         cline: true
@@ -204,6 +215,30 @@ const Settings = ({ onSave }) => {
           <span className="block sm:inline">Loading...</span>
         </div>
       )}
+
+      {/* Project Folder Section */}
+      <div className="bg-green-50 rounded-lg shadow p-6 border-l-4 border-green-500">
+        <h3 className="text-lg font-medium mb-4 text-green-800">Project Folder Settings</h3>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="project-path" className="block text-sm font-medium text-green-900 mb-1">
+              Project Folder Path:
+            </label>
+            <input
+              type="text"
+              id="project-path"
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-green-500"
+              value={config.projectPath}
+              onChange={(e) => setConfig(prev => ({ ...prev, projectPath: e.target.value }))}
+              disabled={loading}
+              placeholder="Enter the path to your project folder"
+            />
+            <p className="mt-1 text-sm text-green-600">
+              This path will be used to monitor and display project file contents
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Kodu AI Section */}
       <div className="bg-blue-50 rounded-lg shadow p-6 border-l-4 border-blue-500">

@@ -86,6 +86,53 @@ async function readMessagesFromFile(filePath) {
     }
 }
 
+// New endpoint to read project files
+app.get('/api/read-project-file', async (req, res) => {
+    const requestId = `read-project-file-${Date.now()}`;
+    debugLogger.startTimer(requestId);
+    
+    const { projectPath: rawProjectPath, filePath: rawFilePath } = req.query;
+    if (!rawProjectPath || !rawFilePath) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ error: 'Both project path and file path are required' });
+    }
+
+    const projectPath = normalizePath(rawProjectPath);
+    const filePath = joinPaths(projectPath, rawFilePath);
+    
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading project file', { 
+        projectPath,
+        filePath 
+    });
+
+    try {
+        // Check if file exists and is accessible
+        await fs.promises.access(filePath);
+        
+        // Read file content
+        const content = await fs.promises.readFile(filePath, 'utf8');
+        
+        debugLogger.logFileOperation(COMPONENT, 'READ_PROJECT_FILE', filePath, {
+            size: content.length
+        });
+        
+        const duration = debugLogger.endTimer(requestId, COMPONENT);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
+            filePath,
+            contentLength: content.length,
+            durationMs: duration
+        });
+        
+        res.json({ content });
+    } catch (error) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading project file', {
+            filePath,
+            error: error.message
+        });
+        res.json({ error: `Error reading file: ${error.message}` });
+    }
+});
+
 // New endpoint to get subfolders
 app.get('/api/get-subfolders', async (req, res) => {
     const requestId = `get-subfolders-${Date.now()}`;
@@ -138,105 +185,112 @@ app.get('/api/validate-path', async (req, res) => {
     debugLogger.startTimer(requestId);
     
     const { basePath: rawBasePath, taskFolder } = req.query;
-    if (!rawBasePath || !taskFolder) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
-        return res.json({ success: false, error: 'Both base path and task folder are required' });
+    if (!rawBasePath) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing base path parameter');
+        return res.json({ success: false, error: 'Base path is required' });
     }
 
-    const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
+    const basePath = taskFolder ? 
+        joinPaths(normalizePath(rawBasePath), taskFolder) : 
+        normalizePath(rawBasePath);
+    
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path', { basePath, taskFolder });
 
     try {
-        // Check if all required files exist
-        const files = [CLAUDE_MESSAGES_PATH, API_HISTORY_PATH, LAST_UPDATED_PATH];
-        const fileChecks = await Promise.all(
-            files.map(async (file) => {
-                const fullPath = joinPaths(basePath, file);
+        // Check if path exists and is accessible
+        await fs.promises.access(basePath);
+
+        // If taskFolder is provided, check for required files
+        if (taskFolder) {
+            const files = [CLAUDE_MESSAGES_PATH, API_HISTORY_PATH, LAST_UPDATED_PATH];
+            const fileChecks = await Promise.all(
+                files.map(async (file) => {
+                    const fullPath = joinPaths(basePath, file);
+                    try {
+                        await fs.promises.access(fullPath);
+                        const content = await fs.promises.readFile(fullPath, 'utf8');
+                        debugLogger.logFileOperation(COMPONENT, 'READ', fullPath, {
+                            size: content.length,
+                            isJson: file.endsWith('.json')
+                        });
+                        
+                        if (file.endsWith('.json')) {
+                            const messages = await readMessagesFromFile(fullPath);
+                            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Parsed ${file}`, {
+                                messageCount: messages.length
+                            });
+                        }
+                        return true;
+                    } catch (err) {
+                        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, `Error accessing file ${fullPath}`, err);
+                        return false;
+                    }
+                })
+            );
+
+            const allFilesExist = fileChecks.every(exists => exists);
+            if (!allFilesExist) {
+                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Required files missing');
+                return res.json({
+                    success: false,
+                    error: 'One or more required files are missing or inaccessible'
+                });
+            }
+
+            // Set up watchers for task folder files
+            if (activeWatchers.has(basePath)) {
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', { basePath });
+                activeWatchers.get(basePath).close();
+            }
+
+            const watchPaths = [
+                joinPaths(basePath, CLAUDE_MESSAGES_PATH),
+                joinPaths(basePath, API_HISTORY_PATH),
+                joinPaths(basePath, LAST_UPDATED_PATH)
+            ];
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting up file watchers', { watchPaths });
+
+            const watcher = chokidar.watch(watchPaths, {
+                persistent: true,
+                ignoreInitial: true,
+                usePolling: true,
+                interval: 1000,
+                awaitWriteFinish: {
+                    stabilityThreshold: 500,
+                    pollInterval: 100
+                }
+            });
+
+            watcher.on('change', async (filePath) => {
+                const fileChangeId = `file-change-${Date.now()}`;
+                debugLogger.startTimer(fileChangeId);
+                
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File changed', { filePath });
+                
                 try {
-                    await fs.promises.access(fullPath);
-                    const content = await fs.promises.readFile(fullPath, 'utf8');
-                    debugLogger.logFileOperation(COMPONENT, 'READ', fullPath, {
-                        size: content.length,
-                        isJson: file.endsWith('.json')
-                    });
-                    
-                    if (file.endsWith('.json')) {
-                        const messages = await readMessagesFromFile(fullPath);
-                        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Parsed ${file}`, {
+                    if (filePath.endsWith('.json')) {
+                        const messages = await readMessagesFromFile(filePath);
+                        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Parsed changed file', {
                             messageCount: messages.length
                         });
                     }
-                    return true;
-                } catch (err) {
-                    debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, `Error accessing file ${fullPath}`, err);
-                    return false;
-                }
-            })
-        );
 
-        const allFilesExist = fileChecks.every(exists => exists);
-        if (!allFilesExist) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Required files missing');
-            return res.json({
-                success: false,
-                error: 'One or more required files are missing or inaccessible'
-            });
-        }
-
-        // Stop existing watcher for this path if any
-        if (activeWatchers.has(basePath)) {
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', { basePath });
-            activeWatchers.get(basePath).close();
-        }
-
-        // Set up new watcher for this path
-        const watchPaths = [
-            joinPaths(basePath, CLAUDE_MESSAGES_PATH),
-            joinPaths(basePath, API_HISTORY_PATH),
-            joinPaths(basePath, LAST_UPDATED_PATH)
-        ];
-
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting up file watchers', { watchPaths });
-
-        const watcher = chokidar.watch(watchPaths, {
-            persistent: true,
-            ignoreInitial: true,
-            usePolling: true,
-            interval: 1000,
-            awaitWriteFinish: {
-                stabilityThreshold: 500,
-                pollInterval: 100
-            }
-        });
-
-        watcher.on('change', async (filePath) => {
-            const fileChangeId = `file-change-${Date.now()}`;
-            debugLogger.startTimer(fileChangeId);
-            
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File changed', { filePath });
-            
-            try {
-                if (filePath.endsWith('.json')) {
-                    const messages = await readMessagesFromFile(filePath);
-                    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Parsed changed file', {
-                        messageCount: messages.length
+                    io.emit('fileUpdated', { 
+                        file: basename(filePath),
+                        path: basePath
                     });
+
+                    debugLogger.endTimer(fileChangeId, COMPONENT);
+                } catch (err) {
+                    debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading changed file', err);
                 }
+            });
 
-                io.emit('fileUpdated', { 
-                    file: basename(filePath),
-                    path: basePath
-                });
+            activeWatchers.set(basePath, watcher);
+        }
 
-                debugLogger.endTimer(fileChangeId, COMPONENT);
-            } catch (err) {
-                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading changed file', err);
-            }
-        });
-
-        activeWatchers.set(basePath, watcher);
         const duration = debugLogger.endTimer(requestId, COMPONENT);
-        
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Path validation successful', {
             basePath,
             durationMs: duration

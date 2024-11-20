@@ -5,6 +5,7 @@ import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
+import FileExplorer from './components/FileExplorer';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
@@ -23,7 +24,8 @@ function App() {
     const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
     return {
       basePath: koduPath || '',
-      taskFolder: koduTaskFolder || ''
+      taskFolder: koduTaskFolder || '',
+      projectPath: localStorage.getItem('project.path') || ''
     };
   });
   const [error, setError] = useState('');
@@ -110,6 +112,11 @@ function App() {
       }
     });
 
+    // Set project path if available
+    if (monitoringConfig.projectPath) {
+      watcher.setProjectPath(monitoringConfig.projectPath);
+    }
+
     setFileWatcher(watcher);
     if (monitoringConfig.basePath && monitoringConfig.taskFolder) {
       initializeWatcher(watcher, monitoringConfig);
@@ -157,9 +164,15 @@ function App() {
       return;
     }
 
+    // Update project path in FileWatcher
+    if (fileWatcher && newConfig.projectPath) {
+      fileWatcher.setProjectPath(newConfig.projectPath);
+    }
+
     setMonitoringConfig({
       basePath,
-      taskFolder
+      taskFolder,
+      projectPath: newConfig.projectPath
     });
 
     if (fileWatcher) {
@@ -174,11 +187,14 @@ function App() {
       const koduPath = localStorage.getItem('koduAI.path');
       const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
       return !!koduPath && !!koduTaskFolder;
-    } else {
+    } else if (activeTab === 'cline') {
       const clinePath = localStorage.getItem('clineAI.path');
       const clineTaskFolder = localStorage.getItem('clineAI.taskFolder');
       return !!clinePath && !!clineTaskFolder;
+    } else if (activeTab === 'files') {
+      return !!monitoringConfig.projectPath;
     }
+    return true;
   };
 
   const getDisplayPath = () => {
@@ -267,6 +283,26 @@ function App() {
         return <DevManagerDashboard messages={messages} />;
       case 'project-manager':
         return <ProjectOwnerDashboard messages={messages} />;
+      case 'files':
+        if (!isPathConfigured()) {
+          return (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">Configuration Required</h2>
+                <p className="text-gray-600 mb-4">
+                  Please configure a project path in settings.
+                </p>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  Go to Settings
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return <FileExplorer fileWatcher={fileWatcher} />;
       case 'settings':
         return <Settings onSave={handlePathsUpdate} />;
       default:
