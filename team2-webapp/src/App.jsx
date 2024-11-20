@@ -9,16 +9,21 @@ import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import './App.css';
 
 const COMPONENT = 'App';
+// Use a constant for path separator based on navigator.platform instead of process.platform
+const PATH_SEPARATOR = navigator.platform.toLowerCase().includes('win') ? '\\' : '/';
 
 function App() {
   const [claudeMessages, setClaudeMessages] = useState([]);
   const [apiMessages, setApiMessages] = useState([]);
   const [fileWatcher, setFileWatcher] = useState(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [monitoringPath, setMonitoringPath] = useState(() => {
+  const [monitoringConfig, setMonitoringConfig] = useState(() => {
     const koduPath = localStorage.getItem('koduAI.path');
     const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
-    return koduPath && koduTaskFolder ? `${koduPath}/${koduTaskFolder}` : '';
+    return {
+      basePath: koduPath || '',
+      taskFolder: koduTaskFolder || ''
+    };
   });
   const [error, setError] = useState('');
   const [showDebug, setShowDebug] = useState(true);
@@ -76,8 +81,8 @@ function App() {
     });
 
     setFileWatcher(watcher);
-    if (monitoringPath) {
-      initializeWatcher(watcher, monitoringPath);
+    if (monitoringConfig.basePath && monitoringConfig.taskFolder) {
+      initializeWatcher(watcher, monitoringConfig);
     }
 
     return () => {
@@ -85,33 +90,31 @@ function App() {
         watcher.stop();
       }
     };
-  }, [addDebugLog, monitoringPath]);
+  }, [addDebugLog, monitoringConfig]);
 
-  const initializeWatcher = async (watcher, path) => {
+  const initializeWatcher = async (watcher, config) => {
     try {
-      if (!path) {
+      if (!config.basePath || !config.taskFolder) {
         throw new Error('No monitoring path configured');
       }
 
-      addDebugLog('Starting monitoring for path:', path);
-      await watcher.setBasePath(path).validatePath();
+      addDebugLog('Starting monitoring with config:', config);
+      await watcher.setBasePath(config.basePath, config.taskFolder).validatePath();
       await watcher.start();
       setIsMonitoring(true);
-      setMonitoringPath(path);
-      addDebugLog('Successfully started monitoring path:', path);
+      addDebugLog('Successfully started monitoring');
     } catch (err) {
       const errorMsg = `Failed to start monitoring: ${err.message}`;
       debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
       setError(errorMsg);
       setIsMonitoring(false);
-      setMonitoringPath('');
       addDebugLog('Error starting monitoring:', err);
     }
   };
 
   const handlePathsUpdate = (newConfig) => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Configuration updated', {
-      oldPath: monitoringPath,
+      oldConfig: monitoringConfig,
       newConfig
     });
 
@@ -123,15 +126,16 @@ function App() {
       return;
     }
 
-    const fullPath = `${basePath}/${taskFolder}`;
-    setMonitoringPath(fullPath);
+    setMonitoringConfig({
+      basePath,
+      taskFolder
+    });
 
     if (fileWatcher) {
       fileWatcher.stop();
       setClaudeMessages([]);
       setApiMessages([]);
       setError('');
-      initializeWatcher(fileWatcher, fullPath);
     }
   };
 
@@ -145,6 +149,11 @@ function App() {
       const clineTaskFolder = localStorage.getItem('clineAI.taskFolder');
       return !!clinePath && !!clineTaskFolder;
     }
+  };
+
+  const getDisplayPath = () => {
+    if (!monitoringConfig.basePath || !monitoringConfig.taskFolder) return '';
+    return `${monitoringConfig.basePath}${PATH_SEPARATOR}${monitoringConfig.taskFolder}`;
   };
 
   const renderContent = () => {
@@ -178,7 +187,7 @@ function App() {
                   ? 'bg-red-100 text-red-700' 
                   : (isMonitoring ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700')
               }`}>
-                {error || (isMonitoring ? `Monitoring: ${monitoringPath}` : 'Not monitoring any path')}
+                {error || (isMonitoring ? `Monitoring: ${getDisplayPath()}` : 'Not monitoring any path')}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-5 p-5">
@@ -214,7 +223,8 @@ function App() {
     claudeMessagesCount: claudeMessages.length,
     apiMessagesCount: apiMessages.length,
     debugLogsCount: debugLogs.length,
-    activeTab
+    activeTab,
+    monitoringConfig
   });
 
   return (

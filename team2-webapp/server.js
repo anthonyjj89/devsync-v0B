@@ -5,7 +5,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { basename, join, normalize } from 'path';
+import { basename, join, normalize, sep } from 'path';
 import { debugLogger, DEBUG_LEVELS } from './src/utils/debug.js';
 import process from 'process';
 
@@ -49,12 +49,17 @@ const activeWatchers = new Map();
 // Helper function to normalize path for Windows
 function normalizePath(path) {
     // First normalize the path using the OS-specific separator
-    const normalized = normalize(path);
+    const normalized = normalize(path).split('/').join(sep);
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Path normalized', {
         original: path,
         normalized
     });
     return normalized;
+}
+
+// Helper function to join paths with correct separator
+function joinPaths(...paths) {
+    return normalize(join(...paths)).split('/').join(sep);
 }
 
 // Helper function to extract messages from JSON file
@@ -138,7 +143,7 @@ app.get('/api/validate-path', async (req, res) => {
         return res.json({ success: false, error: 'Both base path and task folder are required' });
     }
 
-    const basePath = normalizePath(join(rawBasePath, taskFolder));
+    const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path', { basePath, taskFolder });
 
     try {
@@ -146,7 +151,7 @@ app.get('/api/validate-path', async (req, res) => {
         const files = [CLAUDE_MESSAGES_PATH, API_HISTORY_PATH, LAST_UPDATED_PATH];
         const fileChecks = await Promise.all(
             files.map(async (file) => {
-                const fullPath = join(basePath, file);
+                const fullPath = joinPaths(basePath, file);
                 try {
                     await fs.promises.access(fullPath);
                     const content = await fs.promises.readFile(fullPath, 'utf8');
@@ -186,10 +191,10 @@ app.get('/api/validate-path', async (req, res) => {
 
         // Set up new watcher for this path
         const watchPaths = [
-            join(basePath, CLAUDE_MESSAGES_PATH),
-            join(basePath, API_HISTORY_PATH),
-            join(basePath, LAST_UPDATED_PATH)
-        ].map(normalizePath);
+            joinPaths(basePath, CLAUDE_MESSAGES_PATH),
+            joinPaths(basePath, API_HISTORY_PATH),
+            joinPaths(basePath, LAST_UPDATED_PATH)
+        ];
 
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting up file watchers', { watchPaths });
 
@@ -258,8 +263,8 @@ app.get('/api/claude-messages', async (req, res) => {
         return res.json({ error: 'Both base path and task folder are required' });
     }
 
-    const basePath = normalizePath(join(rawBasePath, taskFolder));
-    const filePath = join(basePath, CLAUDE_MESSAGES_PATH);
+    const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
+    const filePath = joinPaths(basePath, CLAUDE_MESSAGES_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath });
 
     try {
@@ -292,8 +297,8 @@ app.get('/api/api-messages', async (req, res) => {
         return res.json({ error: 'Both base path and task folder are required' });
     }
 
-    const basePath = normalizePath(join(rawBasePath, taskFolder));
-    const filePath = join(basePath, API_HISTORY_PATH);
+    const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
+    const filePath = joinPaths(basePath, API_HISTORY_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath });
 
     try {
@@ -326,8 +331,8 @@ app.get('/api/last-updated', async (req, res) => {
         return res.json({ error: 'Both base path and task folder are required' });
     }
 
-    const basePath = normalizePath(join(rawBasePath, taskFolder));
-    const filePath = join(basePath, LAST_UPDATED_PATH);
+    const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
+    const filePath = joinPaths(basePath, LAST_UPDATED_PATH);
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading last updated timestamp', { filePath });
 
     try {
