@@ -58,7 +58,8 @@ const MessageBubble = ({
   showTimestamp = true,
   isError = false,
   errorText = null,
-  metadata = {}
+  metadata = {},
+  onFileClick
 }) => {
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering message bubble', {
@@ -144,6 +145,27 @@ const MessageBubble = ({
 
   const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.assistant;
 
+  const renderTextWithFileLinks = (text) => {
+    // Basic regex to match file paths
+    const filePathRegex = /([a-zA-Z]:\\[^<>:"/\\|?*\n\r]+|[/\w\-.]+[/\w\-.]+\.[a-zA-Z0-9]+)/g;
+    const parts = text.split(filePathRegex);
+
+    return parts.map((part, index) => {
+      if (part.match(filePathRegex)) {
+        return (
+          <button
+            key={index}
+            onClick={() => onFileClick?.(part, timestamp)}
+            className="text-blue-600 hover:underline cursor-pointer"
+          >
+            {part}
+          </button>
+        );
+      }
+      return part;
+    });
+  };
+
   const renderContent = () => {
     if (isError && errorText) {
       // Just show the error text without the "Error:" prefix
@@ -165,7 +187,7 @@ const MessageBubble = ({
       );
     }
 
-    return text;
+    return renderTextWithFileLinks(text);
   };
 
   return (
@@ -208,7 +230,8 @@ MessageBubble.propTypes = {
   showTimestamp: PropTypes.bool,
   isError: PropTypes.bool,
   errorText: PropTypes.string,
-  metadata: PropTypes.object
+  metadata: PropTypes.object,
+  onFileClick: PropTypes.func
 };
 
 export default MessageBubble;

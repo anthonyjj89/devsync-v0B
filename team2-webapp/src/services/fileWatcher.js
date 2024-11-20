@@ -87,6 +87,103 @@ class FileWatcher {
         }
     }
 
+    async getFileHistory(filePath) {
+        if (!this.projectPath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No project path set for getting file history');
+            return { success: false, error: 'No project path set' };
+        }
+
+        const getHistoryId = `get-history-${Date.now()}`;
+        debugLogger.startTimer(getHistoryId);
+
+        try {
+            const encodedProjectPath = encodeURIComponent(this.projectPath);
+            const encodedFilePath = encodeURIComponent(filePath);
+            const response = await fetch(
+                `http://localhost:3002/api/file-history?projectPath=${encodedProjectPath}&filePath=${encodedFilePath}`,
+                { credentials: 'include' }
+            );
+
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'File history response received', {
+                status: response.status,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get file history');
+            }
+
+            const duration = debugLogger.endTimer(getHistoryId, COMPONENT);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File history retrieved successfully', {
+                filePath,
+                versionCount: data.history?.length,
+                durationMs: duration
+            });
+
+            return data;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get file history', {
+                error: error.message
+            });
+            return { success: false, error: error.message };
+        }
+    }
+
+    async readProjectFile(filePath, version = 'latest') {
+        if (!this.projectPath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path not set for file read');
+            return null;
+        }
+
+        const readId = `read-project-file-${Date.now()}`;
+        debugLogger.startTimer(readId);
+
+        try {
+            const encodedProjectPath = encodeURIComponent(this.projectPath);
+            const encodedFilePath = encodeURIComponent(filePath);
+            const encodedVersion = encodeURIComponent(version);
+            const response = await fetch(
+                `http://localhost:3002/api/read-project-file?projectPath=${encodedProjectPath}&filePath=${encodedFilePath}&version=${encodedVersion}`,
+                { credentials: 'include' }
+            );
+
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Project file response received', {
+                status: response.status,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            const duration = debugLogger.endTimer(readId, COMPONENT);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
+                filePath,
+                version,
+                durationMs: duration
+            });
+
+            return data.content;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to read project file', {
+                error: error.message
+            });
+            throw error;
+        }
+    }
+
     async validatePath() {
         if (!this.basePath) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path not set');
@@ -178,53 +275,6 @@ class FileWatcher {
         } catch (error) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation failed', {
                 projectPath: this.projectPath,
-                error: error.message
-            });
-            throw error;
-        }
-    }
-
-    async readProjectFile(filePath) {
-        if (!this.projectPath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path not set for file read');
-            return null;
-        }
-
-        const readId = `read-project-file-${Date.now()}`;
-        debugLogger.startTimer(readId);
-
-        try {
-            const encodedProjectPath = encodeURIComponent(this.projectPath);
-            const encodedFilePath = encodeURIComponent(filePath);
-            const response = await fetch(
-                `http://localhost:3002/api/read-project-file?projectPath=${encodedProjectPath}&filePath=${encodedFilePath}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Project file response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            const duration = debugLogger.endTimer(readId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
-                filePath,
-                durationMs: duration
-            });
-
-            return data.content;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to read project file', {
                 error: error.message
             });
             throw error;

@@ -7,6 +7,7 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { basename, join, normalize, sep } from 'path';
 import { debugLogger, DEBUG_LEVELS } from './src/utils/debug.js';
+import FileHistoryManager from './src/services/fileHistoryManager.js';
 import process from 'process';
 
 const COMPONENT = 'Server';
@@ -24,6 +25,9 @@ const io = new Server(server, {
         credentials: true
     }
 });
+
+// Initialize FileHistoryManager
+const fileHistoryManager = new FileHistoryManager();
 
 // Configure paths for both JSON files
 const CLAUDE_MESSAGES_PATH = 'claude_messages.json';
@@ -45,6 +49,7 @@ app.use(express.json());
 
 // Store active watchers
 const activeWatchers = new Map();
+const fileWatchers = new Map();
 
 // Helper function to normalize path for Windows
 function normalizePath(path) {
@@ -86,42 +91,9 @@ async function readMessagesFromFile(filePath) {
     }
 }
 
-// New endpoint to validate project path
-app.get('/api/validate-project-path', async (req, res) => {
-    const requestId = `validate-project-path-${Date.now()}`;
-    debugLogger.startTimer(requestId);
-    
-    const path = normalizePath(req.query.path);
-    if (!path) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided');
-        return res.json({ success: false, error: 'No path provided' });
-    }
-
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating project path', { path });
-
-    try {
-        // Check if path exists and is accessible
-        await fs.promises.access(path);
-        
-        const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validation successful', {
-            path,
-            durationMs: duration
-        });
-        
-        res.json({ success: true });
-    } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation error', error);
-        res.json({
-            success: false,
-            error: `Failed to validate path: ${error.message}`
-        });
-    }
-});
-
-// New endpoint to read project files
-app.get('/api/read-project-file', async (req, res) => {
-    const requestId = `read-project-file-${Date.now()}`;
+// New endpoint to get file history
+app.get('/api/file-history', async (req, res) => {
+    const requestId = `get-file-history-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
     const { projectPath: rawProjectPath, filePath: rawFilePath } = req.query;
@@ -131,34 +103,77 @@ app.get('/api/read-project-file', async (req, res) => {
     }
 
     const projectPath = normalizePath(rawProjectPath);
-    const filePath = joinPaths(projectPath, rawFilePath);
+    const filePath = rawFilePath;
     
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading project file', { 
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Getting file history', { 
         projectPath,
         filePath 
     });
 
     try {
-        const content = await fs.promises.readFile(filePath, 'utf8');
+        const versions = await fileHistoryManager.getVersions(projectPath, filePath);
         
-        debugLogger.logFileOperation(COMPONENT, 'READ_PROJECT_FILE', filePath, {
-            size: content.length
+        const duration = debugLogger.endTimer(requestId, COMPONENT);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File history retrieved successfully', {
+            filePath,
+            versionCount: versions.length,
+            durationMs: duration
         });
+        
+        res.json({ success: true, history: versions });
+    } catch (error) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting file history', {
+            filePath,
+            error: error.message
+        });
+        res.json({ success: false, error: error.message });
+    }
+});
+
+// New endpoint to read project files with version support
+app.get('/api/read-project-file', async (req, res) => {
+    const requestId = `read-project-file-${Date.now()}`;
+    debugLogger.startTimer(requestId);
+    
+    const { projectPath: rawProjectPath, filePath: rawFilePath, version = 'latest' } = req.query;
+    if (!rawProjectPath || !rawFilePath) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
+        return res.json({ error: 'Both project path and file path are required' });
+    }
+
+    const projectPath = normalizePath(rawProjectPath);
+    const filePath = rawFilePath;
+    
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading project file', { 
+        projectPath,
+        filePath,
+        version
+    });
+
+    try {
+        // Set up file watcher if not already watching
+        if (!fileWatchers.has(filePath)) {
+            const watcher = await fileHistoryManager.watchFile(projectPath, filePath);
+            fileWatchers.set(filePath, watcher);
+        }
+
+        const content = await fileHistoryManager.getVersion(projectPath, filePath, version);
         
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
             filePath,
+            version,
             contentLength: content.length,
             durationMs: duration
         });
         
-        res.json({ content });
+        res.json({ success: true, content });
     } catch (error) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading project file', {
             filePath,
             error: error.message
         });
-        res.json({ error: `Error reading file: ${error.message}` });
+        res.json({ success: false, error: error.message });
     }
 });
 
@@ -183,16 +198,19 @@ app.get('/api/get-subfolders', async (req, res) => {
         const items = await fs.promises.readdir(basePath, { withFileTypes: true });
         
         // Get both files and directories
-        const entries = items.map(item => ({
-            name: item.name,
-            type: item.isDirectory() ? 'directory' : 'file'
-        })).sort((a, b) => {
-            // Sort directories first, then files, both alphabetically
-            if (a.type === b.type) {
-                return a.name.localeCompare(b.name);
-            }
-            return a.type === 'directory' ? -1 : 1;
-        });
+        const entries = items
+            .filter(item => !item.name.startsWith('.')) // Filter out hidden files/folders
+            .map(item => ({
+                name: item.name,
+                type: item.isDirectory() ? 'directory' : 'file'
+            }))
+            .sort((a, b) => {
+                // Sort directories first, then files, both alphabetically
+                if (a.type === b.type) {
+                    return a.name.localeCompare(b.name);
+                }
+                return a.type === 'directory' ? -1 : 1;
+            });
 
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully retrieved entries', {
@@ -459,6 +477,9 @@ io.on('connection', (socket) => {
 process.on('SIGINT', () => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Server shutting down, cleaning up watchers...');
     for (const watcher of activeWatchers.values()) {
+        watcher.close();
+    }
+    for (const watcher of fileWatchers.values()) {
         watcher.close();
     }
     process.exit(0);
