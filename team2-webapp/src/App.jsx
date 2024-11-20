@@ -5,6 +5,7 @@ import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
+import FileActivityTimeline from './components/FileActivityTimeline';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
@@ -210,61 +211,64 @@ function App() {
         }
 
         return (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 bg-gray-50 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${isMonitoring ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="font-medium">
-                    {isMonitoring ? 'Connected' : 'Disconnected'}
-                  </span>
+          <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="p-4 bg-gray-50 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${isMonitoring ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="font-medium">
+                      {isMonitoring ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+                  {lastUpdated && (
+                    <div className="text-sm text-gray-600">
+                      Last updated: {lastUpdated.toLocaleTimeString()}
+                    </div>
+                  )}
+                  <div 
+                    className="text-sm text-gray-600 cursor-help"
+                    title={getDisplayPath()}
+                  >
+                    {monitoringConfig.taskFolder}
+                  </div>
                 </div>
-                {lastUpdated && (
-                  <div className="text-sm text-gray-600">
-                    Last updated: {lastUpdated.toLocaleTimeString()}
+                {error && (
+                  <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
+                    {error}
                   </div>
                 )}
-                <div 
-                  className="text-sm text-gray-600 cursor-help"
-                  title={getDisplayPath()}
-                >
-                  {monitoringConfig.taskFolder}
-                </div>
               </div>
-              {error && (
-                <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
-                  {error}
-                </div>
-              )}
-            </div>
-            <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
-              <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
-                <div className="p-4 border-b bg-gray-50 font-bold flex items-center justify-between">
-                  <div>
-                    <span>Messages ({messages.length})</span>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none">
-                    <span className="text-gray-700">Advanced Mode</span>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={advancedMode}
-                        onChange={() => setAdvancedMode(!advancedMode)}
-                        className="sr-only"
-                      />
-                      <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                      <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+              <div className={`flex-1 p-5 min-h-0 ${showDebug ? 'pb-72' : 'pb-20'}`}>
+                <div className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
+                  <div className="p-4 border-b bg-gray-50 font-bold flex items-center justify-between">
+                    <div>
+                      <span>Messages ({messages.length})</span>
                     </div>
-                  </label>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <MessageList 
-                    messages={messages}
-                    advancedMode={advancedMode}
-                  />
+                    <label className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none">
+                      <span className="text-gray-700">Advanced Mode</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={advancedMode}
+                          onChange={() => setAdvancedMode(!advancedMode)}
+                          className="sr-only"
+                        />
+                        <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                      </div>
+                    </label>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <MessageList 
+                      messages={messages}
+                      advancedMode={advancedMode}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
+            <FileActivityTimeline messages={messages} />
           </div>
         );
       case 'dev-manager':

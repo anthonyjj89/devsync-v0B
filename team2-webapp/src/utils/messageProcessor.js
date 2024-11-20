@@ -24,6 +24,39 @@ const extractTagContent = (text, tagName) => {
 };
 
 /**
+ * Extracts tool information from message content
+ */
+const extractToolInfo = (text) => {
+  const toolTags = ['read_file', 'write_to_file', 'list_files', 'search_files'];
+  let toolInfo = null;
+
+  for (const tag of toolTags) {
+    const toolContent = extractTagContent(text, tag);
+    if (toolContent) {
+      toolInfo = {
+        tool: tag,
+        path: extractTagContent(toolContent, 'path'),
+        filePath: extractTagContent(toolContent, 'filePath'), // Some messages use filePath instead of path
+        content: extractTagContent(toolContent, 'content'),
+      };
+      break;
+    }
+  }
+
+  // Extract tool response information if present
+  const toolResponse = extractTagContent(text, 'toolResponse');
+  if (toolResponse) {
+    toolInfo = {
+      ...toolInfo,
+      toolStatus: extractTagContent(toolResponse, 'toolStatus'),
+      error: extractTagContent(toolResponse, 'error')
+    };
+  }
+
+  return toolInfo;
+};
+
+/**
  * Determines the role of a message based on its content and type
  */
 const determineMessageRole = (message) => {
@@ -86,10 +119,15 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
         .map(item => item.text)
         .join('\n');
 
+      const toolInfo = extractToolInfo(textContent);
+
       return {
         type: 'text',
         content: textContent,
-        metadata: { original: jsonContent },
+        metadata: { 
+          original: jsonContent,
+          toolInfo 
+        },
         role: determineMessageRole(jsonContent)
       };
     }
@@ -125,7 +163,13 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
             content: formatJsonContent(toolData),
             metadata: { 
               tool: toolData.tool,
-              isToolRequest: true 
+              isToolRequest: true,
+              toolInfo: {
+                tool: toolData.tool,
+                path: toolData.path,
+                filePath: toolData.filePath,
+                content: toolData.content
+              }
             },
             role: 'system'
           };
@@ -144,12 +188,16 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
           jsonContent.say === 'text' && 
           !jsonContent.text?.includes('<thinking>')) {
         const role = determineMessageRole(jsonContent);
+        const toolInfo = extractToolInfo(jsonContent.text);
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Basic mode message processed', { role });
 
         return {
           type: 'text',
           content: jsonContent.text,
-          metadata: { original: jsonContent },
+          metadata: { 
+            original: jsonContent,
+            toolInfo
+          },
           role
         };
       }
@@ -188,11 +236,15 @@ const processJsonContent = (jsonContent, advancedMode = false) => {
     // Advanced mode: Handle other messages
     if (jsonContent.text) {
       const role = determineMessageRole(jsonContent);
+      const toolInfo = extractToolInfo(jsonContent.text);
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Advanced mode message processed', { role });
       return {
         type: 'system',
         content: jsonContent.text,
-        metadata: { raw: jsonContent },
+        metadata: { 
+          raw: jsonContent,
+          toolInfo
+        },
         role
       };
     }
@@ -236,10 +288,15 @@ export const processMessageContent = (message, advancedMode = false) => {
         .map(item => item.text)
         .join('\n');
 
+      const toolInfo = extractToolInfo(textContent);
+
       return {
         type: 'text',
         content: textContent,
-        metadata: { original: message },
+        metadata: { 
+          original: message,
+          toolInfo
+        },
         role: determineMessageRole(message)
       };
     }
@@ -263,6 +320,9 @@ export const processMessageContent = (message, advancedMode = false) => {
     const text = String(message);
     if (!text.trim()) return null;
 
+    // Extract tool info before cleaning text
+    const toolInfo = extractToolInfo(text);
+
     // In basic mode, only show clean text without any tags
     if (!advancedMode) {
       // Remove all system tags and keep only conversational content
@@ -278,7 +338,10 @@ export const processMessageContent = (message, advancedMode = false) => {
         return {
           type: 'text',
           content: cleanedText,
-          metadata: { original: text },
+          metadata: { 
+            original: text,
+            toolInfo
+          },
           role: text.includes('user_feedback') ? 'user' : 'assistant'
         };
       }
@@ -291,7 +354,10 @@ export const processMessageContent = (message, advancedMode = false) => {
       return {
         type: 'thinking',
         content: thinkingContent,
-        metadata: { original: text },
+        metadata: { 
+          original: text,
+          toolInfo
+        },
         role: 'assistant'
       };
     }
@@ -303,7 +369,8 @@ export const processMessageContent = (message, advancedMode = false) => {
         content: extractTagContent(toolResponse, 'toolResult') || toolResponse,
         metadata: {
           status: extractTagContent(toolResponse, 'toolStatus'),
-          name: extractTagContent(toolResponse, 'toolName')
+          name: extractTagContent(toolResponse, 'toolName'),
+          toolInfo
         },
         role: 'system'
       };
@@ -322,7 +389,10 @@ export const processMessageContent = (message, advancedMode = false) => {
       return {
         type: 'text',
         content: cleanedText,
-        metadata: { original: text },
+        metadata: { 
+          original: text,
+          toolInfo
+        },
         role
       };
     }
