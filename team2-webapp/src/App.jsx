@@ -165,13 +165,38 @@ function App() {
       newConfig
     });
 
-    const basePath = activeTab === 'kodu' ? newConfig.koduPath : newConfig.clinePath;
-    const taskFolder = activeTab === 'kodu' ? newConfig.koduTaskFolder : newConfig.clineTaskFolder;
-    
+    // Determine which AI to use based on enabled state and path changes
+    let basePath = '';
+    let taskFolder = '';
+    let aiType = '';
+
+    if (newConfig.enabledAIs.kodu && newConfig.koduPath && newConfig.koduTaskFolder) {
+      const koduPathChanged = newConfig.koduPath !== localStorage.getItem('koduAI.path') ||
+                             newConfig.koduTaskFolder !== localStorage.getItem('koduAI.taskFolder');
+      
+      if (!newConfig.enabledAIs.cline || koduPathChanged) {
+        basePath = newConfig.koduPath;
+        taskFolder = newConfig.koduTaskFolder;
+        aiType = 'kodu';
+      }
+    }
+
+    if (newConfig.enabledAIs.cline && newConfig.clinePath && newConfig.clineTaskFolder && !basePath) {
+      basePath = newConfig.clinePath;
+      taskFolder = newConfig.clineTaskFolder;
+      aiType = 'cline';
+    }
+
     if (!basePath || !taskFolder) {
-      setError('Both path and task folder must be configured');
+      setError('No valid AI configuration found. Please enable and configure at least one AI.');
       return;
     }
+
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected AI configuration', {
+      aiType,
+      basePath,
+      taskFolder
+    });
 
     // Stop the current watcher
     if (fileWatcher) {
@@ -200,6 +225,8 @@ function App() {
     // Initialize the watcher
     try {
       await initializeWatcher(newWatcher, updatedConfig);
+      // Switch to the active AI tab
+      setActiveTab(aiType);
     } catch (err) {
       setError(`Failed to initialize new watcher: ${err.message}`);
     }

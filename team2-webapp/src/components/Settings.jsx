@@ -33,9 +33,18 @@ const Settings = ({ onSave }) => {
     try {
       if (config.koduPath) {
         const koduWatcher = new FileWatcher();
+        koduWatcher.setProjectPath(config.koduPath);
         const koduResult = await koduWatcher.getSubfolders();
         if (koduResult.success && Array.isArray(koduResult.entries)) {
-          setKoduSubfolders(koduResult.entries);
+          // Filter for directories only and extract names
+          const folders = koduResult.entries
+            .filter(entry => entry.type === 'directory')
+            .map(entry => entry.name);
+          setKoduSubfolders(folders);
+          debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Loaded Kodu subfolders', {
+            path: config.koduPath,
+            folderCount: folders.length
+          });
         } else {
           throw new Error(koduResult.error || 'Failed to load Kodu subfolders');
         }
@@ -43,9 +52,18 @@ const Settings = ({ onSave }) => {
 
       if (config.clinePath) {
         const clineWatcher = new FileWatcher();
+        clineWatcher.setProjectPath(config.clinePath);
         const clineResult = await clineWatcher.getSubfolders();
         if (clineResult.success && Array.isArray(clineResult.entries)) {
-          setClineSubfolders(clineResult.entries);
+          // Filter for directories only and extract names
+          const folders = clineResult.entries
+            .filter(entry => entry.type === 'directory')
+            .map(entry => entry.name);
+          setClineSubfolders(folders);
+          debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Loaded Cline subfolders', {
+            path: config.clinePath,
+            folderCount: folders.length
+          });
         } else {
           throw new Error(clineResult.error || 'Failed to load Cline subfolders');
         }
