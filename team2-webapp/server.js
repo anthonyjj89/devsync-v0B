@@ -255,7 +255,8 @@ app.get('/api/validate-path', async (req, res) => {
 
         // If taskFolder is provided, check for required files
         if (taskFolder) {
-            const files = [CLAUDE_MESSAGES_PATH, API_HISTORY_PATH, LAST_UPDATED_PATH];
+            // Modified: Only check for JSON files
+            const files = [CLAUDE_MESSAGES_PATH, API_HISTORY_PATH];
             const fileChecks = await Promise.all(
                 files.map(async (file) => {
                     const fullPath = joinPaths(basePath, file);

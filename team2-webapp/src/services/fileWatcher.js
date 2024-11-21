@@ -367,14 +367,24 @@ class FileWatcher {
                 ok: response.ok
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            // Modified: Return current timestamp if file doesn't exist
+            if (!response.ok || response.status === 404) {
+                const currentTimestamp = new Date().toISOString();
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (no last_updated.txt)', {
+                    timestamp: currentTimestamp
+                });
+                return currentTimestamp;
             }
 
             const data = await response.json();
             
             if (data.error) {
-                throw new Error(data.error);
+                const currentTimestamp = new Date().toISOString();
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (error reading last_updated.txt)', {
+                    timestamp: currentTimestamp,
+                    error: data.error
+                });
+                return currentTimestamp;
             }
             
             const duration = debugLogger.endTimer(checkId, COMPONENT);
@@ -385,10 +395,12 @@ class FileWatcher {
 
             return data.timestamp;
         } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to check last_updated.txt', {
+            const currentTimestamp = new Date().toISOString();
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (error)', {
+                timestamp: currentTimestamp,
                 error: error.message
             });
-            return null;
+            return currentTimestamp;
         }
     }
 
