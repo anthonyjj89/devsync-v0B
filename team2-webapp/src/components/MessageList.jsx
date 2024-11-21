@@ -194,7 +194,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
 
   return (
     <div className={`bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
-      <div className="p-4 bg-gray-50 border-b">
+      <div className="p-4 bg-gray-50 border-b sticky top-0 z-50">
         <div className="flex items-center justify-between mb-2">
           <TaskFolderSelect 
             currentFolder={taskFolder}
@@ -228,7 +228,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
         </div>
         <h2 className="font-bold text-lg">Activity Timeline</h2>
       </div>
-      <div className="h-full overflow-y-auto synchronized-scroll">
+      <div className="h-full overflow-y-auto">
         <div className="px-4 py-6 relative">
           {/* Continuous vertical timeline line */}
           <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-blue-200 transform -translate-x-1/2" />

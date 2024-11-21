@@ -58,6 +58,8 @@
 - Role-based message styling
 - Grouped timestamps
 - Technical metadata filtering
+- Fixed settings header with sticky positioning to prevent disappearing during page load
+- Improved z-indexing to ensure header visibility
 
 ### Visual Design
 - Consistent color scheme:
@@ -87,6 +89,12 @@
 - Debug panel toggle
 - Performance monitoring
 - Error tracking
+- Debug window now starts hidden by default
+- Added message processing optimizations:
+  - Memoization for frequent operations
+  - Message content caching
+  - Periodic cache clearing (5-minute intervals)
+  - Optimized JSON parsing for advanced mode
 
 ## Future Enhancements
 

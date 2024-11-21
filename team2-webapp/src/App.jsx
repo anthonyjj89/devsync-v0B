@@ -27,7 +27,7 @@ function App() {
     };
   });
   const [error, setError] = useState('');
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);  // Changed to false by default
   const [debugLogs, setDebugLogs] = useState([]);
   const [activeTab, setActiveTab] = useState('kodu');
   const [selectedFile, setSelectedFile] = useState(null);
