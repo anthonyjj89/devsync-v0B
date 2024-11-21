@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useEffect } from 'react';
 import MessageList from '../MessageList';
 import { debugLogger, DEBUG_LEVELS } from '../../utils/debug';
 
@@ -17,14 +18,73 @@ const AIView = ({
   monitoringConfig,
   onTaskFolderChange
 }) => {
-  debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering AIView', {
-    aiType,
-    isMonitoring,
-    hasError: !!error,
-    messagesCount: messages.length,
-    advancedMode,
-    showDebug
-  });
+  useEffect(() => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'AIView mounted/updated', {
+      aiType,
+      isMonitoring,
+      hasError: !!error,
+      messagesCount: messages?.length || 0,
+      taskFolder: monitoringConfig?.taskFolder,
+      lastUpdated: lastUpdated?.toISOString()
+    });
+
+    // Log message details if there are messages
+    if (messages?.length > 0) {
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Message details', {
+        firstMessage: {
+          type: messages[0].type,
+          timestamp: messages[0].timestamp,
+          role: messages[0].role
+        },
+        lastMessage: {
+          type: messages[messages.length - 1].type,
+          timestamp: messages[messages.length - 1].timestamp,
+          role: messages[messages.length - 1].role
+        }
+      });
+    }
+
+    // Log monitoring config details
+    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Monitoring config', {
+      taskFolder: monitoringConfig?.taskFolder,
+      basePath: monitoringConfig?.basePath,
+      projectPath: monitoringConfig?.projectPath
+    });
+  }, [aiType, isMonitoring, error, messages, monitoringConfig, lastUpdated]);
+
+  // Validate messages array
+  if (!Array.isArray(messages)) {
+    debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Invalid messages prop', {
+      type: typeof messages,
+      value: messages
+    });
+    return (
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 bg-red-100 text-red-700">
+            Error: Invalid messages format
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const handleTaskFolderChange = (folder) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Task folder change requested', {
+      aiType,
+      currentFolder: monitoringConfig?.taskFolder,
+      newFolder: folder
+    });
+
+    onTaskFolderChange({
+      ...monitoringConfig,
+      [`${aiType}TaskFolder`]: folder,
+      enabledAIs: {
+        kodu: aiType === 'kodu',
+        cline: aiType === 'cline'
+      }
+    });
+  };
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -57,15 +117,8 @@ const AIView = ({
             onAdvancedModeChange={onAdvancedModeChange}
             className="h-full"
             onFileClick={onFileClick}
-            taskFolder={monitoringConfig.taskFolder}
-            onTaskFolderChange={(folder) => onTaskFolderChange({
-              ...monitoringConfig,
-              [`${aiType}TaskFolder`]: folder,
-              enabledAIs: {
-                kodu: aiType === 'kodu',
-                cline: aiType === 'cline'
-              }
-            })}
+            taskFolder={monitoringConfig?.taskFolder}
+            onTaskFolderChange={handleTaskFolderChange}
           />
         </div>
       </div>

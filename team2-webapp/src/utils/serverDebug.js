@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import process from 'process';
 
 // Debug levels
@@ -9,13 +10,14 @@ export const DEBUG_LEVELS = {
     PERF: 'PERF'
 };
 
-class DebugLogger {
+class ServerDebugLogger extends EventEmitter {
     constructor() {
+        super();
         this.startTimes = new Map();
         this.debugEnabled = process.env.NODE_ENV !== 'production';
         this.logLevel = process.env.LOG_LEVEL || 'INFO';
-        this.logCache = new Map(); // Cache for recent logs to prevent duplicates
-        this.cacheDuration = 1000; // 1 second cache duration
+        this.logCache = new Map();
+        this.cacheDuration = 1000;
     }
 
     shouldLog(level) {
@@ -34,12 +36,11 @@ class DebugLogger {
         const timestamp = new Date().toISOString();
         const formattedData = data ? 
             JSON.stringify(data, (key, value) => {
-                // Truncate long strings
                 if (typeof value === 'string' && value.length > 200) {
                     return value.substring(0, 200) + '...';
                 }
                 return value;
-            }) : '';
+            }, 2) : '';
 
         return {
             timestamp,
@@ -72,6 +73,7 @@ class DebugLogger {
         // Skip duplicate logs within cache duration
         if (this.isDuplicateLog(logEntry)) return;
 
+        // Console output
         switch (level) {
             case DEBUG_LEVELS.ERROR:
                 console.error(logEntry.formatted);
@@ -80,10 +82,17 @@ class DebugLogger {
                 console.warn(logEntry.formatted);
                 break;
             default:
-                if (level !== DEBUG_LEVELS.DEBUG || this.debugEnabled) {
-                    console.log(logEntry.formatted);
-                }
+                console.log(logEntry.formatted);
         }
+
+        // Emit log event
+        this.emit('log', {
+            timestamp: new Date().toLocaleTimeString(),
+            level,
+            component,
+            message: logEntry.message,
+            data: logEntry.data
+        });
 
         return logEntry;
     }
@@ -96,7 +105,7 @@ class DebugLogger {
         const startTime = this.startTimes.get(operationId);
         if (startTime) {
             const duration = performance.now() - startTime;
-            if (duration > 1000) { // Only log operations that take more than 1 second
+            if (duration > 1000) {
                 this.log(DEBUG_LEVELS.PERF, component, `Operation ${operationId} completed`, {
                     duration: `${duration.toFixed(2)}ms`
                 });
@@ -107,7 +116,6 @@ class DebugLogger {
         return null;
     }
 
-    // Log file operations only if they fail or are slow
     logFileOperation(component, operation, path, result = null) {
         if (result?.error || (result?.duration && result.duration > 1000)) {
             this.log(DEBUG_LEVELS.WARN, component, `File Operation: ${operation}`, {
@@ -117,7 +125,6 @@ class DebugLogger {
         }
     }
 
-    // Log socket events only if they're errors or important state changes
     logSocketEvent(component, eventName, data = null) {
         if (eventName === 'error' || eventName === 'disconnect' || eventName === 'connect') {
             this.log(DEBUG_LEVELS.INFO, component, `Socket Event: ${eventName}`, data);
@@ -125,4 +132,4 @@ class DebugLogger {
     }
 }
 
-export const debugLogger = new DebugLogger();
+export const debugLogger = new ServerDebugLogger();

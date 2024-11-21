@@ -5,6 +5,7 @@ const COMPONENT = 'FileWatcher';
 
 class FileWatcher {
     constructor(onUpdate, onConnectionChange) {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing FileWatcher');
         this.onUpdate = onUpdate;
         this.onConnectionChange = onConnectionChange;
         this.socket = null;
@@ -18,47 +19,78 @@ class FileWatcher {
     }
 
     setBasePath(path, taskFolder = '') {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting base path', {
+            path,
+            taskFolder
+        });
         this.basePath = path;
         this.taskFolder = taskFolder;
         return this;
     }
 
     setProjectPath(path) {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting project path', { path });
         this.projectPath = path;
         return this;
     }
 
     async validatePath() {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path', {
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
+        });
+
         if (!this.basePath) {
             throw new Error('Base path must be set');
         }
 
         const encodedBasePath = encodeURIComponent(this.basePath);
         const encodedTaskFolder = encodeURIComponent(this.taskFolder || '');
-        const response = await fetch(
-            `http://localhost:3002/api/validate-path?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
-            { credentials: 'include' }
-        );
+        
+        try {
+            const response = await fetch(
+                `http://localhost:3002/api/validate-path?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
+                { credentials: 'include' }
+            );
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) {
+                const error = `HTTP error! status: ${response.status}`;
+                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation failed', { error });
+                throw new Error(error);
+            }
+
+            const data = await response.json();
+            if (!data.success) {
+                const error = data.error || 'Path validation failed';
+                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation failed', { error });
+                throw new Error(error);
+            }
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Path validation successful');
+            return true;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation error', { error: error.message });
+            throw error;
         }
-
-        const data = await response.json();
-        if (!data.success) {
-            throw new Error(data.error || 'Path validation failed');
-        }
-
-        return true;
     }
 
     processMessage(msg) {
-        if (!msg || typeof msg !== 'object') return null;
+        if (!msg || typeof msg !== 'object') {
+            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Invalid message received', { msg });
+            return null;
+        }
 
         const cacheKey = JSON.stringify(msg);
         if (this.messageCache.has(cacheKey)) {
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Message found in cache');
             return this.messageCache.get(cacheKey);
         }
+
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Processing message', {
+            type: msg.type,
+            say: msg.say,
+            timestamp: msg.ts
+        });
 
         let processed;
 
@@ -107,7 +139,11 @@ class FileWatcher {
                         ...msg.metadata
                     }
                 };
-            } catch {
+            } catch (error) {
+                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to parse tool message', {
+                    error: error.message,
+                    text: msg.text
+                });
                 return null;
             }
         }
@@ -128,6 +164,12 @@ class FileWatcher {
             processed = msg;
         }
 
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Message processed', {
+            type: processed.type,
+            role: processed.role,
+            timestamp: processed.timestamp
+        });
+
         // Cache the processed message
         this.messageCache.set(cacheKey, processed);
 
@@ -141,9 +183,16 @@ class FileWatcher {
     }
 
     async readFile(type) {
-        if (!this.basePath || !this.taskFolder) return null;
+        if (!this.basePath || !this.taskFolder) {
+            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Cannot read file - missing path config');
+            return null;
+        }
 
         const endpoint = type === 'claude' ? 'claude-messages' : 'api-messages';
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Reading ${type} messages`, {
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
+        });
 
         try {
             const encodedBasePath = encodeURIComponent(this.basePath);
@@ -164,10 +213,16 @@ class FileWatcher {
 
             // Process messages
             const messages = Array.isArray(data) ? data : (data.messages || []);
-            return messages
+            const processedMessages = messages
                 .filter(msg => msg !== null && typeof msg === 'object')
                 .map(msg => this.processMessage(msg))
                 .filter(Boolean);
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Processed ${type} messages`, {
+                count: processedMessages.length
+            });
+
+            return processedMessages;
 
         } catch (error) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, `Failed to read ${type} messages`, {
@@ -179,23 +234,30 @@ class FileWatcher {
 
     setupSocket() {
         if (this.socket) {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Cleaning up existing socket');
             this.socket.disconnect();
             this.socket = null;
         }
 
-        if (this.isDestroyed) return;
+        if (this.isDestroyed) {
+            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Cannot setup socket - FileWatcher is destroyed');
+            return;
+        }
+
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting up socket connection');
 
         this.socket = io('http://localhost:3002', {
             withCredentials: true,
             reconnection: true,
-            reconnectionDelay: Math.min(1000 * Math.pow(2, this.retryCount), 10000), // Exponential backoff
+            reconnectionDelay: Math.min(1000 * Math.pow(2, this.retryCount), 10000),
             reconnectionDelayMax: 10000,
             reconnectionAttempts: this.maxRetries,
-            timeout: 20000 // Increase connection timeout
+            timeout: 20000
         });
         
         this.socket.on('connect', () => {
             if (this.isDestroyed) {
+                debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Socket connected but FileWatcher is destroyed');
                 this.socket.disconnect();
                 return;
             }
@@ -217,6 +279,7 @@ class FileWatcher {
             this.retryCount = 0;
             this.isConnected = true;
             if (this.onConnectionChange) {
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Notifying connection state change', { connected: true });
                 this.onConnectionChange(true);
             }
             this.checkAndUpdate();
@@ -230,6 +293,7 @@ class FileWatcher {
 
             this.retryCount++;
             if (this.retryCount >= this.maxRetries) {
+                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Max retries reached, disconnecting');
                 this.socket.disconnect();
                 if (this.onConnectionChange) {
                     this.onConnectionChange(false);
@@ -239,7 +303,10 @@ class FileWatcher {
 
         let updateTimeout = null;
         this.socket.on('fileUpdated', (data) => {
-            if (this.isDestroyed) return;
+            if (this.isDestroyed) {
+                debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'File update received but FileWatcher is destroyed');
+                return;
+            }
 
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File update received', data);
 
@@ -261,6 +328,7 @@ class FileWatcher {
 
             this.isConnected = false;
             if (this.onConnectionChange) {
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Notifying connection state change', { connected: false });
                 this.onConnectionChange(false);
             }
         });
@@ -268,12 +336,20 @@ class FileWatcher {
 
     async start() {
         if (!this.basePath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Cannot start - base path not set');
             throw new Error('Base path must be set');
         }
 
         if (this.isDestroyed) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Cannot start - FileWatcher is destroyed');
             throw new Error('FileWatcher has been destroyed');
         }
+
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file watcher', {
+            basePath: this.basePath,
+            taskFolder: this.taskFolder,
+            projectPath: this.projectPath
+        });
 
         const currentBasePath = this.basePath;
         const currentTaskFolder = this.taskFolder;
@@ -285,11 +361,6 @@ class FileWatcher {
         this.taskFolder = currentTaskFolder;
         this.projectPath = currentProjectPath;
 
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file watcher', {
-            basePath: this.basePath,
-            taskFolder: this.taskFolder
-        });
-
         this.setupSocket();
         await this.checkAndUpdate();
 
@@ -297,7 +368,14 @@ class FileWatcher {
     }
 
     async checkAndUpdate() {
-        if (!this.basePath || !this.taskFolder || this.isDestroyed) return;
+        if (!this.basePath || !this.taskFolder || this.isDestroyed) {
+            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Cannot check for updates', {
+                hasBasePath: !!this.basePath,
+                hasTaskFolder: !!this.taskFolder,
+                isDestroyed: this.isDestroyed
+            });
+            return;
+        }
 
         try {
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Checking for updates', {
@@ -312,15 +390,22 @@ class FileWatcher {
 
             if (this.onUpdate && !this.isDestroyed) {
                 if (claudeMessages?.length) {
+                    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Sending claude messages update', {
+                        count: claudeMessages.length
+                    });
                     this.onUpdate('claude', claudeMessages);
                 }
                 if (apiMessages?.length) {
+                    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Sending api messages update', {
+                        count: apiMessages.length
+                    });
                     this.onUpdate('api', apiMessages);
                 }
             }
         } catch (error) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error during file read', {
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
         }
     }
@@ -333,6 +418,9 @@ class FileWatcher {
             if (this.basePath && this.taskFolder) {
                 const watchPath = `${this.basePath}/${this.taskFolder}`;
                 this.socket.emit('unsubscribe', watchPath);
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Unsubscribed from path', {
+                    path: watchPath
+                });
             }
             this.socket.disconnect();
             this.socket = null;
@@ -345,6 +433,7 @@ class FileWatcher {
         this.retryCount = 0;
         this.isConnected = false;
         if (this.onConnectionChange) {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Notifying connection state change on stop', { connected: false });
             this.onConnectionChange(false);
         }
         return this;

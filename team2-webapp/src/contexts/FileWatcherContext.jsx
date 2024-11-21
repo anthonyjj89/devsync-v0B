@@ -7,7 +7,7 @@ const COMPONENT = 'FileWatcherContext';
 
 const FileWatcherContext = createContext(null);
 
-export const FileWatcherProvider = ({ children }) => {
+function FileWatcherProvider({ children }) {
   const [fileWatchers, setFileWatchers] = useState({
     kodu: null,
     cline: null
@@ -21,29 +21,49 @@ export const FileWatcherProvider = ({ children }) => {
   // Use refs to track mounted state and prevent updates after unmount
   const isMounted = useRef(true);
   const initializationInProgress = useRef(false);
+  const watchersRef = useRef(fileWatchers);
+  const initializationCount = useRef(0);
+
+  // Keep watchersRef in sync with fileWatchers state
+  useEffect(() => {
+    watchersRef.current = fileWatchers;
+  }, [fileWatchers]);
 
   // Cleanup on unmount
   useEffect(() => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider mounted');
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider mounted', {
+      mountCount: ++initializationCount.current
+    });
     
     return () => {
-      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider unmounting');
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider unmounting', {
+        mountCount: initializationCount.current,
+        hasActiveWatchers: Object.values(watchersRef.current).some(w => w !== null)
+      });
+
       isMounted.current = false;
-      // Cleanup all watchers
-      Object.entries(fileWatchers).forEach(([type, watcher]) => {
+      
+      // Use watchersRef for cleanup to ensure we have latest state
+      Object.entries(watchersRef.current).forEach(([type, watcher]) => {
         if (watcher) {
-          debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Stopping watcher for ${type}`);
+          debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Stopping watcher for ${type}`, {
+            mountCount: initializationCount.current
+          });
           watcher.destroy();
         }
       });
     };
-  }, [fileWatchers]); // Added fileWatchers to dependency array
+  }, []); // Empty dependency array since we use refs
 
   const handleConnectionChange = useCallback((connected) => {
-    if (!isMounted.current) return;
+    if (!isMounted.current) {
+      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Connection state change ignored - component unmounted');
+      return;
+    }
 
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Connection state changed', {
-      connected
+      connected,
+      mountCount: initializationCount.current
     });
 
     setIsMonitoring(connected);
@@ -55,17 +75,24 @@ export const FileWatcherProvider = ({ children }) => {
   }, []);
 
   const createFileWatcher = useCallback((aiType) => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Creating file watcher', { aiType });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Creating file watcher', {
+      aiType,
+      mountCount: initializationCount.current
+    });
     
     return new FileWatcher(
       // onUpdate callback
       (type, data) => {
-        if (!isMounted.current) return;
+        if (!isMounted.current) {
+          debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Update ignored - component unmounted');
+          return;
+        }
 
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Received file update', {
           type,
           messageCount: data?.length,
-          aiType
+          aiType,
+          mountCount: initializationCount.current
         });
 
         try {
@@ -86,7 +113,10 @@ export const FileWatcherProvider = ({ children }) => {
           setError('');
         } catch (err) {
           const errorMsg = `Error processing ${aiType} messages: ${err.message}`;
-          debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
+          debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, {
+            error: err.message,
+            stack: err.stack
+          });
           setError(errorMsg);
         }
       },
@@ -97,13 +127,17 @@ export const FileWatcherProvider = ({ children }) => {
 
   const initializeWatcher = useCallback(async (config, aiType) => {
     if (initializationInProgress.current) {
-      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Initialization already in progress');
+      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Initialization already in progress', {
+        aiType,
+        mountCount: initializationCount.current
+      });
       return;
     }
 
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing watcher', {
       aiType,
-      config
+      config,
+      mountCount: initializationCount.current
     });
 
     initializationInProgress.current = true;
@@ -114,9 +148,13 @@ export const FileWatcherProvider = ({ children }) => {
       }
 
       // Stop existing watcher if any
-      if (fileWatchers[aiType]) {
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', { aiType });
-        fileWatchers[aiType].destroy();
+      const currentWatcher = watchersRef.current[aiType];
+      if (currentWatcher) {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', {
+          aiType,
+          mountCount: initializationCount.current
+        });
+        currentWatcher.destroy();
       }
 
       // Create new watcher
@@ -124,7 +162,8 @@ export const FileWatcherProvider = ({ children }) => {
       
       debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting paths', {
         basePath: config.basePath,
-        taskFolder: config.taskFolder
+        taskFolder: config.taskFolder,
+        mountCount: initializationCount.current
       });
       
       await watcher.setBasePath(config.basePath, config.taskFolder).validatePath();
@@ -133,6 +172,16 @@ export const FileWatcherProvider = ({ children }) => {
         watcher.setProjectPath(config.projectPath);
       }
       
+      if (!isMounted.current) {
+        debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Component unmounted during initialization', {
+          aiType,
+          mountCount: initializationCount.current,
+          phase: 'pre-start'
+        });
+        watcher.destroy();
+        return;
+      }
+
       debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting watcher');
       await watcher.start();
 
@@ -148,17 +197,23 @@ export const FileWatcherProvider = ({ children }) => {
         setMessages([]); // Clear messages when switching AI
 
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Watcher initialized successfully', {
-          aiType
+          aiType,
+          mountCount: initializationCount.current
         });
       } else {
-        debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Component unmounted during initialization');
+        debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Component unmounted during initialization', {
+          aiType,
+          mountCount: initializationCount.current,
+          phase: 'post-start'
+        });
         watcher.destroy();
       }
     } catch (err) {
       const errorMsg = `Failed to start monitoring: ${err.message}`;
       debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, {
         error: err.message,
-        stack: err.stack
+        stack: err.stack,
+        mountCount: initializationCount.current
       });
       if (isMounted.current) {
         setError(errorMsg);
@@ -167,13 +222,17 @@ export const FileWatcherProvider = ({ children }) => {
     } finally {
       initializationInProgress.current = false;
     }
-  }, [fileWatchers, createFileWatcher]);
+  }, [createFileWatcher]);
 
   const stopWatcher = useCallback((aiType) => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping watcher', { aiType });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping watcher', {
+      aiType,
+      mountCount: initializationCount.current
+    });
     
-    if (fileWatchers[aiType]) {
-      fileWatchers[aiType].destroy();
+    const currentWatcher = watchersRef.current[aiType];
+    if (currentWatcher) {
+      currentWatcher.destroy();
       setFileWatchers(prev => ({
         ...prev,
         [aiType]: null
@@ -184,7 +243,7 @@ export const FileWatcherProvider = ({ children }) => {
         setIsMonitoring(false);
       }
     }
-  }, [fileWatchers, activeAI]);
+  }, [activeAI]);
 
   const value = {
     fileWatcher: fileWatchers[activeAI], // For backward compatibility
@@ -204,13 +263,16 @@ export const FileWatcherProvider = ({ children }) => {
       {children}
     </FileWatcherContext.Provider>
   );
-};
+}
 
 FileWatcherProvider.propTypes = {
   children: PropTypes.node.isRequired
 };
 
-export const useFileWatcher = () => {
+FileWatcherProvider.displayName = 'FileWatcherProvider';
+
+// Include the hook in the default export
+FileWatcherProvider.useFileWatcher = () => {
   const context = useContext(FileWatcherContext);
   if (!context) {
     throw new Error('useFileWatcher must be used within a FileWatcherProvider');
@@ -218,4 +280,4 @@ export const useFileWatcher = () => {
   return context;
 };
 
-export default FileWatcherContext;
+export default FileWatcherProvider;

@@ -40,7 +40,8 @@ const AppContent = () => {
   const {
     showDebug,
     debugLogs,
-    toggleDebug
+    toggleDebug,
+    clearLogs
   } = useDebugLogs();
 
   // Initialize watcher when configuration changes
@@ -77,6 +78,11 @@ const AppContent = () => {
   };
 
   const handleTabChange = (tab) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Tab changed', {
+      from: activeTab,
+      to: tab
+    });
+    
     setActiveTab(tab);
     // Update active AI when switching between AI tabs
     if (tab === 'kodu' || tab === 'cline') {
@@ -86,6 +92,7 @@ const AppContent = () => {
 
   const renderAIView = (aiType) => {
     if (!isPathConfigured(aiType)) {
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Path not configured', { aiType });
       return (
         <ConfigurationRequired
           aiType={aiType}
@@ -100,6 +107,12 @@ const AppContent = () => {
       taskFolder: monitoringConfig[`${aiType}TaskFolder`] || '',
       basePath: monitoringConfig[`${aiType}Path`] || ''
     };
+
+    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering AI view', {
+      aiType,
+      hasError: !!error,
+      config: aiConfig
+    });
 
     return (
       <AIView
@@ -169,11 +182,12 @@ const AppContent = () => {
         activeTab={activeTab}
         onTabChange={handleTabChange}
       />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         {renderContent()}
         <DebugPanel
           show={showDebug}
           onToggle={toggleDebug}
+          onClear={clearLogs}
           debugLogs={debugLogs}
         />
       </main>

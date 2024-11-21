@@ -24,7 +24,7 @@ const usePathConfig = () => {
 
   useEffect(() => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initial path config loaded', monitoringConfig);
-  }, []);
+  }, [monitoringConfig]); // Added monitoringConfig to dependency array
 
   const handlePathsUpdate = useCallback(async (newConfig) => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Configuration update requested', {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'useDebugLogs';
@@ -7,32 +7,53 @@ const useDebugLogs = () => {
   const [showDebug, setShowDebug] = useState(false);
   const [debugLogs, setDebugLogs] = useState([]);
 
-  const addDebugLog = useCallback((message, data = null) => {
-    const logEntry = {
-      timestamp: new Date().toLocaleTimeString(),
-      message: typeof message === 'string' 
-        ? message 
-        : JSON.stringify(message, null, 2),
-      data: data ? JSON.stringify(data, null, 2) : null
+  // Subscribe to debug logger events
+  useEffect(() => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing debug log listener');
+
+    const handleLog = (logEntry) => {
+      setDebugLogs(prev => {
+        const updatedLogs = [...prev, {
+          timestamp: logEntry.timestamp,
+          message: `[${logEntry.level}] [${logEntry.component}] ${logEntry.message}`,
+          data: logEntry.data
+        }];
+        return updatedLogs.slice(-100); // Keep last 100 logs
+      });
     };
-    
-    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, logEntry.message, data);
-    
-    setDebugLogs(prev => {
-      const updatedLogs = [...prev, logEntry];
-      return updatedLogs.slice(-50); // Keep last 50 logs
-    });
+
+    // Subscribe to logger events
+    const unsubscribe = debugLogger.subscribe(handleLog);
+
+    return () => {
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Cleaning up debug log listener');
+      unsubscribe();
+    };
+  }, []);
+
+  const addDebugLog = useCallback((message, data = null) => {
+    debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, message, data);
   }, []);
 
   const toggleDebug = useCallback(() => {
-    setShowDebug(prev => !prev);
+    setShowDebug(prev => {
+      const newState = !prev;
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Debug panel ${newState ? 'shown' : 'hidden'}`);
+      return newState;
+    });
+  }, []);
+
+  const clearLogs = useCallback(() => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Clearing debug logs');
+    setDebugLogs([]);
   }, []);
 
   return {
     showDebug,
     debugLogs,
     addDebugLog,
-    toggleDebug
+    toggleDebug,
+    clearLogs
   };
 };
 

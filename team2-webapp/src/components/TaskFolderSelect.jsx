@@ -18,8 +18,40 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
 
     // Load recent folders
     useEffect(() => {
-        const recent = JSON.parse(localStorage.getItem(`${aiType}AI.recentTaskFolders`) || '[]');
-        setRecentFolders(recent);
+        try {
+            const recentKey = `${aiType}AI.recentTaskFolders`;
+            const recent = JSON.parse(localStorage.getItem(recentKey) || '[]');
+            
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loaded recent folders', {
+                aiType,
+                recentCount: recent.length,
+                recentFolders: recent
+            });
+            
+            setRecentFolders(recent);
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error loading recent folders', {
+                aiType,
+                error: error.message
+            });
+            setRecentFolders([]);
+        }
+    }, [aiType]);
+
+    // Get base path for AI type
+    const getBasePath = useCallback(() => {
+        const storedPath = localStorage.getItem(`${aiType}AI.path`);
+        const defaultPath = AI_PATHS[aiType];
+        const basePath = storedPath || defaultPath;
+
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Resolved base path', {
+            aiType,
+            storedPath,
+            defaultPath,
+            usedPath: basePath
+        });
+
+        return basePath;
     }, [aiType]);
 
     // Fetch available folders
@@ -28,12 +60,17 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
         setError(null);
 
         try {
-            const basePath = localStorage.getItem(`${aiType}AI.path`) || AI_PATHS[aiType];
+            const basePath = getBasePath();
+            if (!basePath) {
+                throw new Error('No base path configured');
+            }
+
             const encodedPath = encodeURIComponent(basePath);
             
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Fetching folders', {
                 aiType,
-                basePath
+                basePath,
+                encodedPath
             });
 
             const response = await fetch(
@@ -50,49 +87,99 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
                 throw new Error(data.error || 'Failed to get folders');
             }
 
-            setAvailableFolders(data.entries || []);
+            const folders = data.entries || [];
+            setAvailableFolders(folders);
+            
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folders fetched successfully', {
                 aiType,
-                folderCount: data.entries?.length
+                folderCount: folders.length,
+                folders
             });
+
+            // Validate current folder exists in available folders
+            if (currentFolder && !folders.includes(currentFolder)) {
+                debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Current folder not found in available folders', {
+                    currentFolder,
+                    availableFolders: folders
+                });
+            }
         } catch (error) {
-            setError('Failed to load folders: ' + error.message);
+            const errorMsg = 'Failed to load folders: ' + error.message;
+            setError(errorMsg);
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error fetching folders', {
                 aiType,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
         } finally {
             setIsLoading(false);
         }
-    }, [aiType]);
+    }, [aiType, currentFolder, getBasePath]);
 
     // Fetch folders when dropdown opens
     useEffect(() => {
         if (isOpen) {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Dropdown opened, fetching folders', {
+                aiType,
+                currentFolder
+            });
             fetchAvailableFolders();
         }
     }, [isOpen, fetchAvailableFolders]);
 
     const handleSelect = useCallback((folder) => {
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected task folder', {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folder selection initiated', {
             aiType,
-            folder
+            selectedFolder: folder,
+            currentFolder
         });
+
+        if (!folder) {
+            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Attempted to select empty folder');
+            return;
+        }
         
-        // Update recent folders for this AI
-        const recent = JSON.parse(localStorage.getItem(`${aiType}AI.recentTaskFolders`) || '[]');
-        const updated = [folder, ...recent.filter(f => f !== folder)].slice(0, 5);
-        localStorage.setItem(`${aiType}AI.recentTaskFolders`, JSON.stringify(updated));
-        setRecentFolders(updated);
-        
-        onSelect(folder);
-        setIsOpen(false);
-    }, [aiType, onSelect]);
+        try {
+            // Update recent folders for this AI
+            const recentKey = `${aiType}AI.recentTaskFolders`;
+            const recent = JSON.parse(localStorage.getItem(recentKey) || '[]');
+            const updated = [folder, ...recent.filter(f => f !== folder)].slice(0, 5);
+            
+            localStorage.setItem(recentKey, JSON.stringify(updated));
+            setRecentFolders(updated);
+            
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Recent folders updated', {
+                aiType,
+                updatedRecent: updated
+            });
+            
+            onSelect(folder);
+            setIsOpen(false);
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folder selection completed', {
+                aiType,
+                selectedFolder: folder
+            });
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error during folder selection', {
+                aiType,
+                folder,
+                error: error.message
+            });
+        }
+    }, [aiType, currentFolder, onSelect]);
 
     return (
         <div className="relative">
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={() => {
+                    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Dropdown toggle clicked', {
+                        aiType,
+                        currentState: isOpen,
+                        newState: !isOpen
+                    });
+                    setIsOpen(!isOpen);
+                }}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border rounded-md"
             >
                 <span>{currentFolder || 'Select Task Folder'}</span>
