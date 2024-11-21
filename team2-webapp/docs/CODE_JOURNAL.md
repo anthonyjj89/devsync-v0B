@@ -1,236 +1,144 @@
-# Code Journal
+# Code Change Journal
 
-## Latest Changes
+## Recent Changes
 
-### [Date: YYYY-MM-DD]
+### Message Processing Improvements
+- **Date**: 2024-01-19
+- **Files**: `src/utils/messageProcessor.js`
+- **Changes**:
+  - Improved role determination logic
+  - Added message caching for performance
+  - Enhanced error handling
+  - Added debug logging
+- **Impact**: Better message classification and performance
 
-#### [Component/Module Name]
-**File**: `src/components/Example.tsx`
-**Type**: [New Feature/Bug Fix/Refactor/Performance]
-**Changes Made**:
-```typescript
-// Previous code
-const oldImplementation = () => {
-  // Old implementation
-};
+### File Watching Enhancements
+- **Files**: `src/services/fileWatcher.js`, `server.js`
+- **Changes**:
+  - Added WebSocket reconnection logic
+  - Improved file change detection
+  - Enhanced error handling
+  - Added performance monitoring
+- **Impact**: More reliable file monitoring
 
-// New code
-const newImplementation = () => {
-  // New implementation with improvements
-};
-```
-**Rationale**: [Explanation of why changes were made]
-**Impact**: [What parts of the system are affected]
-**Testing Notes**: [How changes were tested]
+### UI/UX Updates
+- **Files**: Multiple component files
+- **Changes**:
+  - Split AI settings for Kodu and Cline
+  - Enhanced navigation sidebar
+  - Improved debug panel
+  - Added file explorer refresh
+- **Impact**: Better user experience and functionality
 
-#### [Another Change]
-**File**: `src/services/ExampleService.ts`
-**Changes**:
-- [List of specific changes]
-- [Code modifications]
-- [Updates made]
-**Testing**: [Testing approach]
+### Debug System Implementation
+- **Files**: `src/utils/debug.js`, `src/utils/serverDebug.js`
+- **Changes**:
+  - Added structured logging
+  - Implemented performance tracking
+  - Enhanced error reporting
+  - Added debug panel toggle
+- **Impact**: Better development and troubleshooting tools
 
-## Historical Changes
+## Core Components
 
-### [Previous Date]
-
-#### [Change Description]
-**Files Modified**:
-- `src/components/ComponentA.tsx`
-- `src/utils/utilityB.ts`
-**Purpose**: [Why changes were needed]
-**Implementation Details**:
-```typescript
-// Implementation code
-const implementationExample = {
-  feature: 'description',
-  changes: [
-    'change 1',
-    'change 2'
-  ]
-};
-```
-**Review Notes**: [Code review feedback]
-
-## Performance Optimizations
-
-### [Optimization Title]
-**Date**: [YYYY-MM-DD]
-**Target**: [What was optimized]
-**Metrics**:
-- Before: [Previous performance]
-- After: [Improved performance]
-**Implementation**:
-```typescript
-// Optimization code
-const optimizedFunction = () => {
-  // Optimized implementation
+### Message Processing
+```javascript
+// messageProcessor.js
+const determineMessageRole = (message) => {
+  if (message.role) return message.role;
+  return text.includes('user_feedback') ? 'user' : 'assistant';
 };
 ```
 
-## Bug Fixes
-
-### [Bug ID: BUG-001]
-**Date**: [YYYY-MM-DD]
-**Issue**: [Bug description]
-**Root Cause**: [What caused the bug]
-**Solution**:
-```typescript
-// Fix implementation
-const bugFix = {
-  problem: 'description',
-  solution: 'implementation'
-};
-```
-**Verification**: [How fix was verified]
-
-## Refactoring
-
-### [Refactor Title]
-**Date**: [YYYY-MM-DD]
-**Scope**: [What was refactored]
-**Motivation**: [Why refactoring was needed]
-**Changes**:
-```typescript
-// Before refactoring
-const oldPattern = {
-  // Old implementation
-};
-
-// After refactoring
-const newPattern = {
-  // New implementation
-};
-```
-**Benefits**: [Improvements achieved]
-
-## API Changes
-
-### [API Update]
-**Date**: [YYYY-MM-DD]
-**Type**: [Breaking/Non-Breaking]
-**Changes**:
-```typescript
-// Old API
-interface OldAPI {
-  // Old interface
-}
-
-// New API
-interface NewAPI {
-  // New interface
-}
-```
-**Migration Guide**: [How to update implementations]
-
-## Dependencies
-
-### [Dependency Update]
-**Date**: [YYYY-MM-DD]
-**Package**: [Package name]
-**Version**: [Old] → [New]
-**Changes Required**:
-```typescript
-// Required code updates
-const dependencyChanges = {
-  // Implementation changes
-};
-```
-**Testing Notes**: [Verification steps]
-
-## Security Updates
-
-### [Security Patch]
-**Date**: [YYYY-MM-DD]
-**Issue**: [Security concern]
-**Fix**:
-```typescript
-// Security implementation
-const securityUpdate = {
-  // Security measures
-};
-```
-**Verification**: [Security testing]
-
-## Testing Updates
-
-### [Test Suite Update]
-**Date**: [YYYY-MM-DD]
-**Scope**: [What was tested]
-**Changes**:
-```typescript
-// New/Updated tests
-describe('Feature', () => {
-  test('should work correctly', () => {
-    // Test implementation
+### File Watching
+```javascript
+// fileWatcher.js
+setupSocket() {
+  this.socket = io('http://localhost:3002', {
+    withCredentials: true,
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 5
   });
-});
+}
 ```
-**Coverage Impact**: [Changes in coverage]
 
-## Documentation Updates
-
-### [Documentation Change]
-**Date**: [YYYY-MM-DD]
-**Files**: [Modified documentation files]
-**Changes**: [What was updated]
-**Reason**: [Why updates were needed]
-
-## Code Style Updates
-
-### [Style Change]
-**Date**: [YYYY-MM-DD]
-**Scope**: [Affected areas]
-**Changes**:
-```typescript
-// Style updates
-const styleExample = {
-  // New styling pattern
-};
+### Debug Logging
+```javascript
+// debug.js
+class DebugLogger {
+  log(level, component, message, data = null) {
+    const logEntry = this.formatMessage(level, component, message, data);
+    // Log handling logic
+  }
+}
 ```
-**Rationale**: [Why changes were made]
 
-## Technical Debt
+## Architectural Decisions
 
-### [Technical Debt Item]
-**Date**: [YYYY-MM-DD]
-**Issue**: [Description of technical debt]
-**Plan**: [How to address it]
-**Priority**: [High/Medium/Low]
-**Impact**: [Effect on project]
+### Message Flow
+1. File changes detected by FileWatcher
+2. Changes processed through WebSocket
+3. Messages parsed by MessageProcessor
+4. UI updated via React state
 
-## Experiments
+### State Management
+1. Local storage for settings
+2. React context for shared state
+3. File-based persistence for messages
+4. WebSocket for real-time updates
 
-### [Experiment Name]
-**Date**: [YYYY-MM-DD]
-**Purpose**: [What was tested]
-**Implementation**:
-```typescript
-// Experimental code
-const experiment = {
-  // Implementation details
-};
-```
-**Results**: [Findings]
-**Decision**: [Whether to implement]
+### Error Handling
+1. Centralized error logging
+2. User-friendly error messages
+3. Automatic retry mechanisms
+4. Debug information capture
 
-## Review Notes
+## Future Considerations
 
-### [Code Review]
-**Date**: [YYYY-MM-DD]
-**Files**: [Reviewed files]
-**Feedback**:
-- [Review comment 1]
-- [Review comment 2]
-**Actions Taken**: [How feedback was addressed]
+### Planned Refactoring
+1. Message processing optimization
+2. Component structure improvement
+3. Error handling enhancement
+4. Performance optimization
 
-## Migration Notes
+### Technical Debt
+1. Add comprehensive testing
+2. Improve type definitions
+3. Enhance documentation
+4. Optimize file operations
 
-### [Migration Name]
-**Date**: [YYYY-MM-DD]
-**Purpose**: [Why migration was needed]
-**Steps**:
-1. [Migration step 1]
-2. [Migration step 2]
-**Verification**: [How migration was verified]
+### Feature Development
+1. Enhanced message search
+2. Better file management
+3. Improved AI integration
+4. Advanced debugging tools
+
+## Testing Notes
+
+### Current Coverage
+- Basic component rendering
+- File operations
+- Message processing
+- WebSocket communication
+
+### Needed Tests
+1. Edge case handling
+2. Error scenarios
+3. Performance testing
+4. Integration testing
+
+## Performance Considerations
+
+### Optimizations Made
+1. Message caching
+2. Debounced updates
+3. Memoized components
+4. Efficient file watching
+
+### Areas for Improvement
+1. Large message handling
+2. File operation speed
+3. UI responsiveness
+4. Memory management

@@ -1,181 +1,142 @@
 # Current Development Tasks
 
-## Sprint [Number] - [Start Date] to [End Date]
+## High Priority
 
-## High Priority Tasks 🔥
+### Memory Leak Investigation
+- [ ] Profile file watching system memory usage
+- [ ] Identify memory leak sources
+- [ ] Implement memory optimization
+- [ ] Add memory usage monitoring
+**Owner**: @performance.team
+**Status**: In Progress
+**ETA**: 2024-01-26
 
-### [TASK-HP-001] [Task Title]
-**Status**: 🚧 In Progress
-**Owner**: [Developer Name]
-**Due**: [YYYY-MM-DD]
-**Dependencies**: [List dependencies]
+### Message Role Detection Fix
+- [ ] Debug role determination logic
+- [ ] Add role validation checks
+- [ ] Improve role detection accuracy
+- [ ] Update role processing tests
+**Owner**: @messaging.team
+**Status**: In Progress
+**ETA**: 2024-01-24
 
-**Description**:
-[Detailed task description]
+### Search Implementation
+- [ ] Design search interface
+- [ ] Implement search functionality
+- [ ] Add filtering capabilities
+- [ ] Optimize search performance
+**Owner**: TBD
+**Status**: Planning
+**ETA**: 2024-02-02
 
-**Subtasks**:
-- [ ] [Subtask 1]
-- [ ] [Subtask 2]
-- [ ] [Subtask 3]
+## Medium Priority
 
-**Progress Notes**:
-- [YYYY-MM-DD]: [Progress update]
-- [YYYY-MM-DD]: [Progress update]
+### Dark Mode Implementation
+- [ ] Create theme system
+- [ ] Design dark color palette
+- [ ] Update component styles
+- [ ] Add theme toggle
+**Owner**: @ui.team
+**Status**: In Progress
+**ETA**: 2024-01-31
 
-**Blockers**:
-- [ ] [Blocker 1]
-- [ ] [Blocker 2]
+### File History Enhancement
+- [ ] Improve version tracking
+- [ ] Add diff viewer
+- [ ] Enhance history navigation
+- [ ] Optimize storage
+**Owner**: @file.team
+**Status**: Planning
+**ETA**: 2024-02-07
 
-### [TASK-HP-002] [Task Title]
-[Similar structure as above]
+### Performance Optimization
+- [ ] Optimize message caching
+- [ ] Improve file operation speed
+- [ ] Enhance UI responsiveness
+- [ ] Implement better memory management
+**Owner**: @performance.team
+**Status**: Planning
+**ETA**: 2024-02-09
 
-## Medium Priority Tasks ⏳
-
-### [TASK-MP-001] [Task Title]
-**Status**: 📋 Planned
-**Owner**: [Developer Name]
-**Due**: [YYYY-MM-DD]
-
-[Task details following same structure]
-
-## Low Priority Tasks 📌
-
-### [TASK-LP-001] [Task Title]
-**Status**: 💡 Under Consideration
-**Owner**: [Developer Name]
-**Due**: [YYYY-MM-DD]
-
-[Task details following same structure]
-
-## In Review ⚡
-
-### [TASK-001] [Task Title]
-**Status**: 👀 Under Review
-**Reviewer**: [Reviewer Name]
-**Submitted**: [YYYY-MM-DD]
-
-**Review Notes**:
-- [ ] [Review point 1]
-- [ ] [Review point 2]
-- [ ] [Review point 3]
-
-## Completed Tasks ✅
-
-### [TASK-002] [Task Title]
-**Completed**: [YYYY-MM-DD]
-**Owner**: [Developer Name]
-**Notes**: [Completion notes]
-
-## Task Categories
-
-### Frontend Development
-- [TASK-FE-001] [Task title]
-- [TASK-FE-002] [Task title]
-
-### Backend Development
-- [TASK-BE-001] [Task title]
-- [TASK-BE-002] [Task title]
-
-### Testing
-- [TASK-TEST-001] [Task title]
-- [TASK-TEST-002] [Task title]
+## Low Priority
 
 ### Documentation
-- [TASK-DOC-001] [Task title]
-- [TASK-DOC-002] [Task title]
+- [ ] Update API documentation
+- [ ] Add component documentation
+- [ ] Improve setup guides
+- [ ] Create troubleshooting guide
+**Owner**: @docs.team
+**Status**: Ongoing
+**ETA**: 2024-02-15
 
-## Task Templates
+### Testing
+- [ ] Add unit tests
+- [ ] Implement integration tests
+- [ ] Add performance tests
+- [ ] Create end-to-end tests
+**Owner**: @qa.team
+**Status**: Planning
+**ETA**: 2024-02-28
 
-### New Task Template
-```markdown
-### [TASK-XXX] [Task Title]
-**Status**: [Status]
-**Owner**: [Developer Name]
-**Due**: [YYYY-MM-DD]
-**Dependencies**: [List dependencies]
+### Code Quality
+- [ ] Add ESLint rules
+- [ ] Improve code organization
+- [ ] Add code documentation
+- [ ] Implement best practices
+**Owner**: All Teams
+**Status**: Ongoing
+**ETA**: Continuous
 
-**Description**:
-[Task description]
+## Recently Completed
 
-**Subtasks**:
-- [ ] [Subtask 1]
-- [ ] [Subtask 2]
+### Debug System Implementation ✅
+- Implemented structured logging
+- Added performance tracking
+- Enhanced error reporting
+- Added debug panel toggle
+**Completed**: 2024-01-19
 
-**Progress Notes**:
-- [YYYY-MM-DD]: [Progress update]
+### Settings Split ✅
+- Separated Kodu and Cline settings
+- Improved configuration UI
+- Added validation
+- Enhanced error handling
+**Completed**: 2024-01-19
 
-**Blockers**:
-- [ ] [Blocker 1]
-```
+## Blocked Tasks
 
-## Status Definitions
-
-### Task Statuses
-- 📋 Planned: Task is defined but not started
-- 🚧 In Progress: Currently being worked on
-- 👀 Under Review: In code review
-- ⏸️ Blocked: Cannot proceed due to dependencies
-- ✅ Completed: Task is finished and verified
-
-## Priority Guidelines
-
-### Priority Levels
-- 🔥 High: Critical for current sprint
-- ⏳ Medium: Important but not blocking
-- 📌 Low: Nice to have, can be deferred
-
-## Daily Updates
-
-### [YYYY-MM-DD]
-#### Completed
-- [Task/Subtask completed]
-- [Task/Subtask completed]
-
-#### In Progress
-- [Current task progress]
-- [Current task progress]
-
-#### Blocked
-- [Blocked task and reason]
-- [Blocked task and reason]
-
-## Weekly Goals
-
-### Week [Number]
-**Goals**:
-- [ ] [Goal 1]
-- [ ] [Goal 2]
-- [ ] [Goal 3]
-
-**Progress**:
-- [Progress update]
-- [Progress update]
-
-## Resource Allocation
-
-### Current Sprint
-- [Developer 1]: [X] tasks
-- [Developer 2]: [X] tasks
-- [Developer 3]: [X] tasks
-
-## Dependencies Map
-
-### Critical Path
-1. [Task-001] → [Task-002] → [Task-003]
-2. [Task-004] → [Task-005]
-
-### Blocked Tasks
-- [Task-006] blocked by [Task-002]
-- [Task-007] blocked by [Task-004]
+### Waiting for Dependencies
+1. ⏸️ Advanced file operations (waiting for file system API)
+2. ⏸️ Enhanced error reporting (waiting for logging system)
+3. ⏸️ Performance monitoring (waiting for metrics system)
 
 ## Notes
 
-### Important Reminders
-- [Reminder 1]
-- [Reminder 2]
-- [Reminder 3]
+### Development Guidelines
+1. Update task status daily
+2. Document blockers immediately
+3. Track time estimates
+4. Update completion dates
 
-### Questions to Resolve
-- [ ] [Question 1]
-- [ ] [Question 2]
-- [ ] [Question 3]
+### Priority Criteria
+- **High**: Critical for functionality
+- **Medium**: Important for usability
+- **Low**: Nice to have features
+
+### Task Management
+- Update status in daily standups
+- Review priorities weekly
+- Update estimates as needed
+- Document completion criteria
+
+### Current Sprint Focus
+1. Memory optimization
+2. Message processing improvements
+3. Search functionality
+4. Dark mode implementation
+
+### Next Sprint Planning
+1. File history enhancements
+2. Performance optimization
+3. Documentation updates
+4. Testing implementation

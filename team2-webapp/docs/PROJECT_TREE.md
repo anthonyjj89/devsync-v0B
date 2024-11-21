@@ -1,177 +1,129 @@
-# Project Directory Structure
+# Project Structure Documentation
 
-## Overview
-This document outlines the project's directory structure and explains the purpose of each major directory and file.
+## Directory Overview
 
-## Directory Tree
+### Root Directory
 ```
-[project-name]/
-├── src/                      # Source code
-│   ├── components/           # React/UI components
-│   │   ├── common/          # Reusable components
-│   │   ├── features/        # Feature-specific components
-│   │   └── layouts/         # Layout components
-│   ├── services/            # External service integrations
-│   ├── hooks/               # Custom React hooks
-│   ├── utils/               # Utility functions
-│   ├── types/               # TypeScript type definitions
-│   ├── styles/              # Global styles and themes
-│   ├── contexts/            # React contexts
-│   └── tests/               # Test files
-├── public/                   # Static assets
-├── docs/                     # Documentation
-├── scripts/                  # Build/deployment scripts
-└── config/                   # Configuration files
+team2-webapp/
+├── docs/           # Project documentation
+├── memlog/         # Implementation tracking and improvements
+├── public/         # Static assets
+└── src/           # Source code
 ```
 
-## Directory Descriptions
-
-### `/src`
-Main source code directory containing all application code.
-
-#### `/src/components`
-React components organized by function:
-- `/common`: Reusable UI components (buttons, inputs, cards)
-- `/features`: Feature-specific components
-- `/layouts`: Page layouts and structural components
-
-#### `/src/services`
-External service integrations:
-- API clients
-- Third-party service wrappers
-- Data fetching utilities
-
-#### `/src/hooks`
-Custom React hooks:
-- Data fetching hooks
-- State management hooks
-- Utility hooks
-
-#### `/src/utils`
-Utility functions and helpers:
-- Data formatting
-- Calculations
-- Common operations
-
-#### `/src/types`
-TypeScript type definitions:
-- Interface definitions
-- Type aliases
-- Enums
-
-#### `/src/styles`
-Styling-related files:
-- Global styles
-- Theme definitions
-- Style utilities
-
-#### `/src/contexts`
-React context definitions:
-- State management contexts
-- Theme contexts
-- Feature-specific contexts
-
-#### `/src/tests`
-Test files:
-- Unit tests
-- Integration tests
-- Test utilities
-
-### `/public`
-Static assets:
-- Images
-- Fonts
-- Global static files
-
-### `/docs`
-Project documentation:
-- Setup guides
-- API documentation
-- Architecture diagrams
-
-### `/scripts`
-Build and deployment scripts:
-- Build configurations
-- Deployment automations
-- Development utilities
-
-### `/config`
-Configuration files:
-- Environment configs
-- Build settings
-- Tool configurations
-
-## Naming Conventions
-
-### Components
-- PascalCase for component files: `Button.tsx`, `UserProfile.tsx`
-- Corresponding styles: `Button.styles.ts`, `UserProfile.styles.ts`
-- Tests: `Button.test.tsx`, `UserProfile.test.tsx`
-
-### Utilities
-- camelCase for utility files: `formatDate.ts`, `calculateTotal.ts`
-- Tests: `formatDate.test.ts`, `calculateTotal.test.ts`
-
-### Hooks
-- Prefix with 'use': `useAuth.ts`, `useDataFetching.ts`
-- Tests: `useAuth.test.ts`, `useDataFetching.test.ts`
-
-### Contexts
-- Suffix with 'Context': `ThemeContext.ts`, `AuthContext.ts`
-- Tests: `ThemeContext.test.ts`, `AuthContext.test.ts`
-
-## Import Organization
-
-### Import Order
-1. External libraries
-2. Internal modules
-3. Components
-4. Hooks
-5. Utils
-6. Types
-7. Styles
-
-Example:
-```typescript
-// External libraries
-import React from 'react';
-import { useState } from 'react';
-
-// Internal modules
-import { API } from '@/services/api';
-
-// Components
-import { Button } from '@/components/common';
-
-// Hooks
-import { useAuth } from '@/hooks/useAuth';
-
-// Utils
-import { formatDate } from '@/utils/formatDate';
-
-// Types
-import { UserType } from '@/types';
-
-// Styles
-import { StyledContainer } from './styles';
+### Source Code Structure
+```
+src/
+├── assets/         # Static assets used in components
+├── components/     # React components
+│   ├── activity/   # Activity tracking components
+│   ├── ai/        # AI-specific components
+│   ├── debug/     # Debugging interface
+│   ├── file/      # File management components
+│   └── views/     # Major view components
+├── contexts/      # React contexts
+├── hooks/         # Custom React hooks
+├── services/      # Core services
+│   ├── file/      # File operations
+│   ├── path/      # Path validation
+│   └── socket/    # WebSocket management
+└── utils/         # Utility functions
 ```
 
-## Best Practices
+## Key Components
 
-### File Organization
-- Keep related files together
-- Use index files for cleaner imports
-- Maintain consistent directory structure
-- Document significant deviations
+### Core Services
+- `fileWatcher.js`: Real-time file monitoring
+- `fileHistoryManager.js`: File version management
+- `SocketManagement.js`: WebSocket communication
+- `PathValidation.js`: Path validation utilities
+
+### React Components
+- `App.jsx`: Main application component
+- `MessageList.jsx`: Message display
+- `FileExplorer.jsx`: File system navigation
+- `Settings.jsx`: Application configuration
+- `DevManagerDashboard.jsx`: Development management
+- `ProjectOwnerDashboard.jsx`: Project overview
+
+### Utility Functions
+- `debug.js`: Debugging utilities
+- `messageProcessor.js`: Message handling
+- `pathUtils.js`: Path manipulation
+- `serverDebug.js`: Server-side debugging
+
+## Documentation Structure
+
+### docs/
+```
+docs/
+├── General Guides/           # Development guides
+├── Starting Docs/           # Onboarding documentation
+├── BUG_DATABASE.md         # Bug tracking
+├── CODE_JOURNAL.md         # Code changes
+├── DEV_LOG.md             # Development history
+├── INDEX.md               # Documentation index
+├── PROJECT_TREE.md        # This file
+└── README.md              # Project overview
+```
+
+### memlog/
+```
+memlog/
+├── debug_improvements.md      # Debugging enhancements
+├── message_feed_improvements.md # Message handling updates
+├── settings_improvements.md    # Settings updates
+└── ui_improvements.md         # UI enhancements
+```
+
+## Key Files
+
+### Configuration Files
+- `package.json`: Project dependencies
+- `vite.config.js`: Vite configuration
+- `tailwind.config.js`: Tailwind CSS settings
+- `eslint.config.js`: ESLint configuration
+
+### Core Application Files
+- `server.js`: Express backend server
+- `index.html`: Entry point
+- `src/main.jsx`: React entry point
+- `src/App.jsx`: Main React component
+
+## Development Guidelines
+
+### Component Organization
+- Components should be organized by feature
+- Shared components go in the root components directory
+- Feature-specific components go in feature subdirectories
+
+### Service Structure
+- Core services in services/ directory
+- Feature-specific services in feature subdirectories
+- Utility functions in utils/ directory
+
+### Documentation
+- Keep docs/ up to date with changes
+- Update memlog/ with implementation details
+- Maintain clear component documentation
+- Document all major changes
+
+### Code Style
+- Follow ESLint configuration
+- Use consistent naming conventions
+- Maintain proper file organization
+- Follow React best practices
+
+## Future Considerations
+
+### Planned Directories
+- `tests/`: Test files
+- `scripts/`: Build and utility scripts
+- `types/`: TypeScript type definitions
+- `constants/`: Shared constants
 
 ### Code Organization
-- Group related functionality
-- Use clear, descriptive names
-- Follow established patterns
-- Keep files focused and manageable
-
-### Testing Organization
-- Mirror source structure in tests
-- Keep test files close to source
-- Use consistent naming patterns
-- Maintain test documentation
+- Consider feature-based organization
+- Implement proper test structure
+- Add proper type definitions
+- Improve documentation organization

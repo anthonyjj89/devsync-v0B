@@ -1,130 +1,160 @@
 # Project Handover Documentation
 
-## Latest Session Update ([Date])
+## Latest Session Update (2024-01-19)
 
 ### Session Achievements
-1. [Major achievement 1]
-2. [Major achievement 2]
-3. [Major achievement 3]
+1. Implemented comprehensive debug system with structured logging
+2. Split AI settings for Kodu and Cline
+3. Enhanced message processing with role detection
+4. Improved file watching system
 
 ### Active Issues
-- [BUG-001] [Brief bug description]
-- [BUG-002] [Brief bug description]
-- [FEAT-001] [Feature request/improvement]
+- [BUG-HP-001] Memory leak in file watching system
+- [BUG-HP-002] Message role detection issues
+- [FEAT-HP-001] Message search functionality needed
+- [FEAT-HP-002] Dark mode implementation in progress
 
 ### Next Steps
-1. [Immediate priority 1]
-2. [Immediate priority 2]
-3. [Upcoming task]
+1. Investigate and fix memory leak
+2. Improve message role detection
+3. Implement search functionality
+4. Complete dark mode implementation
 
 ## Quick Start
 
 ### Environment Setup
 1. Install required software:
-   - [Software 1] version [X.X.X]+
-   - [Software 2] version [X.X.X]+
+   - Node.js version 18.0.0+
+   - npm or yarn
 
 2. Clone and setup:
 ```bash
 # Clone repository
 git clone [repository-url]
+cd team2-webapp
 
 # Install dependencies
 npm install
+
+# Start development server
+npm run dev
+
+# Start backend server (in separate terminal)
+node server.js
 ```
 
-3. Environment variables:
-```bash
-# .env
-API_KEY=your_key_here
-DATABASE_URL=your_db_url
-```
+3. Configure paths:
+   - Set Kodu AI path in settings
+   - Set Cline AI path in settings
+   - Configure project path for file watching
 
 ## Critical Components
 
-### [Component 1]
-- Location: `src/components/[ComponentName]`
-- Purpose: [Brief description]
-- Dependencies: [List key dependencies]
-- Current issues: [List related bugs/features]
+### Message Processing System
+- Location: `src/utils/messageProcessor.js`
+- Purpose: Handles message parsing, role detection, and formatting
+- Dependencies: debug.js
+- Current issues: Role detection improvements needed
 
-### [Component 2]
-- Location: `src/services/[ServiceName]`
-- Purpose: [Brief description]
-- Dependencies: [List key dependencies]
-- Current issues: [List related bugs/features]
+### File Watcher
+- Location: `src/services/fileWatcher.js`
+- Purpose: Real-time file monitoring and synchronization
+- Dependencies: Socket.IO, debug.js
+- Current issues: Memory leak investigation
 
-## Important APIs
+### Debug System
+- Location: `src/utils/debug.js`
+- Purpose: Comprehensive logging and debugging
+- Dependencies: None
+- Current issues: None (recently implemented)
 
-### [API Service 1]
-```typescript
-// Location: src/services/[service].ts
-const serviceFunction = async (param: Type): Promise<Result> => {
-  // Brief description of functionality
-};
+## Important Services
+
+### FileWatcher Service
+```javascript
+// Location: src/services/fileWatcher.js
+class FileWatcher {
+  constructor(onUpdate) {
+    // Handles file watching and updates
+  }
+  
+  async start() {
+    // Initializes file watching
+  }
+}
 ```
 
-### [API Service 2]
-```typescript
-// Location: src/services/[service].ts
-interface ServiceConfig {
-  // Configuration options
-}
+### MessageProcessor
+```javascript
+// Location: src/utils/messageProcessor.js
+export const processMessageContent = (message, advancedMode = false) => {
+  // Processes and formats messages
+};
 ```
 
 ## Common Tasks
 
 ### Development Workflow
 1. Starting development:
-   - [Step 1]
-   - [Step 2]
-   - [Step 3]
+   - Start development server: `npm run dev`
+   - Start backend server: `node server.js`
+   - Configure AI paths in settings
+   - Enable debug panel if needed
 
 2. Ending development session:
-   - [Step 1]
-   - [Step 2]
-   - [Step 3]
+   - Document changes in CODE_JOURNAL.md
+   - Update CURRENT_TASKS.md
+   - Stop all running servers
+   - Commit changes with clear messages
 
 ### Bug Reporting
-1. [Step 1 for reporting bugs]
-2. [Step 2 for reporting bugs]
-3. [Step 3 for reporting bugs]
+1. Check BUG_DATABASE.md format
+2. Add bug with required information
+3. Update BUGS_AND_FEATURES.md
+4. Assign priority and owner
 
 ## Known Issues
 
 ### Current Limitations
-1. [Limitation 1]
-2. [Limitation 2]
-3. [Limitation 3]
+1. Memory usage in file watching system
+2. Message role detection accuracy
+3. No search functionality
+4. Limited theme support
 
 ### Workarounds
-1. [Workaround for limitation 1]
-2. [Workaround for limitation 2]
-3. [Workaround for limitation 3]
+1. Restart application if memory usage is high
+2. Manually verify message roles in advanced mode
+3. Use browser search for message finding
+4. Use browser dark mode for now
 
 ## Security Considerations
 
-### API Keys
-- Storage location: [Where to store]
-- Rotation schedule: [When to rotate]
-- Access management: [How to manage]
+### File Access
+- Only access specified directories
+- Validate all paths
+- Handle file permissions properly
 
 ### Data Storage
-- Storage method: [Storage solution]
-- Backup process: [Backup details]
-- Security measures: [Security protocols]
+- File-based storage system
+- Local file system only
+- Regular Git backups
 
 ## Testing
 
 ### Manual Testing
-1. [Test scenario 1]
-2. [Test scenario 2]
-3. [Test scenario 3]
+1. Test file watching functionality
+2. Verify message processing
+3. Check AI integration
+4. Validate settings persistence
 
-### Automated Testing
-- Unit tests: `npm run test:unit`
-- Integration tests: `npm run test:integration`
-- E2E tests: `npm run test:e2e`
+### Development Testing
+```bash
+# Start development server
+npm run dev
+
+# Run linting
+npm run lint
+```
 
 ## Deployment
 
@@ -135,69 +165,47 @@ npm run build
 
 # Start development server
 npm run dev
-```
 
-### Production
-1. [Deployment step 1]
-2. [Deployment step 2]
-3. [Deployment step 3]
+# Start backend server
+node server.js
+```
 
 ## Monitoring
 
 ### Error Tracking
-- [Tool/Method 1]
-- [Tool/Method 2]
-- [Tool/Method 3]
+- Debug panel in application
+- Console logging
+- File operation logging
+- WebSocket connection monitoring
 
 ### Performance
-- [Metric 1]
-- [Metric 2]
-- [Metric 3]
-
-## Contact Information
-
-### Development Team
-- [Role 1]: [Contact info]
-- [Role 2]: [Contact info]
-- [Role 3]: [Contact info]
-
-### External Services
-- [Service 1] Support: [Contact info]
-- [Service 2] Support: [Contact info]
-- [Service 3] Support: [Contact info]
-
-## Additional Resources
-
-### Documentation
-- [Link to relevant doc 1]
-- [Link to relevant doc 2]
-- [Link to relevant doc 3]
-
-### Tools
-- [Tool 1]: [Purpose/Usage]
-- [Tool 2]: [Purpose/Usage]
-- [Tool 3]: [Purpose/Usage]
-
-## Emergency Procedures
-
-### Service Outages
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
-
-### Data Issues
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
+- Memory usage monitoring
+- File watching performance
+- Message processing speed
+- UI responsiveness
 
 ## Code Standards
 
 ### Style Guide
-- [Standard 1]
-- [Standard 2]
-- [Standard 3]
+- Use ESLint configuration
+- Follow React best practices
+- Maintain consistent file structure
+- Document complex logic
 
 ### Best Practices
-- [Practice 1]
-- [Practice 2]
-- [Practice 3]
+- Use debug logging for important operations
+- Handle errors appropriately
+- Follow component organization
+- Keep services modular
+
+### File Organization
+- Components in appropriate directories
+- Services in services directory
+- Utilities in utils directory
+- Documentation in docs directory
+
+### Documentation
+- Update memlog files for improvements
+- Maintain clear code comments
+- Keep documentation current
+- Document all major changes

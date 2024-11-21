@@ -5,6 +5,7 @@ import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
 import Sidebar from './components/Sidebar';
 import FileExplorer from './components/FileExplorer';
+import Settings from './components/Settings';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
 import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
@@ -268,10 +269,10 @@ function App() {
                   Please configure both the path and task folder for {activeTab === 'kodu' ? 'Kodu' : 'Cline'} AI in settings.
                 </p>
                 <button
-                  onClick={() => setShowDebug(true)}
+                  onClick={() => setActiveTab('settings')}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
-                  Show Debug Panel
+                  Open Settings
                 </button>
               </div>
             </div>
@@ -333,10 +334,10 @@ function App() {
                   Please configure a project path in settings.
                 </p>
                 <button
-                  onClick={() => setShowDebug(true)}
+                  onClick={() => setActiveTab('settings')}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
-                  Show Debug Panel
+                  Open Settings
                 </button>
               </div>
             </div>
@@ -347,6 +348,14 @@ function App() {
             fileWatcher={fileWatcher} 
             initialFile={selectedFile}
             initialVersion={selectedVersion}
+          />
+        );
+      case 'settings':
+        return (
+          <Settings
+            onPathsUpdate={handlePathsUpdate}
+            monitoringConfig={monitoringConfig}
+            error={error}
           />
         );
       default:
