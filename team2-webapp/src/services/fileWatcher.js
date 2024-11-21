@@ -6,12 +6,17 @@ import FileHistory from './file/FileHistory';
 
 const COMPONENT = 'FileWatcher';
 
+const AI_BASE_PATHS = {
+    kodu: 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks',
+    cline: 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/cline-ai.cline-dev/tasks'
+};
+
 class FileWatcher {
     constructor(onUpdate, aiType = 'kodu') {
         this.onUpdate = onUpdate;
         this.intervalId = null;
         this.lastTimestamp = null;
-        this.basePath = null;
+        this.basePath = AI_BASE_PATHS[aiType];
         this.taskFolder = null;
         this.projectPath = null;
         this.socket = null;
@@ -31,7 +36,8 @@ class FileWatcher {
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcher instance created', {
             maxRetries: this.maxRetries,
-            aiType: this.aiType
+            aiType: this.aiType,
+            basePath: this.basePath
         });
     }
 
@@ -62,14 +68,60 @@ class FileWatcher {
 
     setAIType(aiType) {
         this.aiType = aiType;
+        this.basePath = AI_BASE_PATHS[aiType];
+        this.pathValidation.setBasePath(this.basePath, this.taskFolder);
+        
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'AI type set', {
-            aiType: this.aiType
+            aiType: this.aiType,
+            basePath: this.basePath
         });
         return this;
     }
 
     async getSubfolders(currentPath = '') {
-        return this.fileHistory.getSubfolders(currentPath);
+        // If no current path is provided, use the AI's base path
+        const basePath = currentPath || this.basePath;
+        if (!basePath) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No base path available for getting subfolders');
+            return { success: false, error: 'No base path available' };
+        }
+
+        try {
+            const encodedPath = encodeURIComponent(basePath);
+            const response = await fetch(
+                `http://localhost:3002/api/get-subfolders?path=${encodedPath}`,
+                { credentials: 'include' }
+            );
+
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Subfolders response received', {
+                status: response.status,
+                ok: response.ok,
+                aiType: this.aiType
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get subfolders');
+            }
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Subfolders retrieved successfully', {
+                folderCount: data.entries?.length,
+                aiType: this.aiType
+            });
+
+            return data;
+        } catch (error) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get subfolders', {
+                error: error.message,
+                aiType: this.aiType
+            });
+            return { success: false, error: error.message };
+        }
     }
 
     async getFileHistory(filePath) {

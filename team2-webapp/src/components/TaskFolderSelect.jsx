@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import { useFileWatcher } from '../contexts/FileWatcherContext';
 
 const COMPONENT = 'TaskFolderSelect';
 
@@ -10,6 +11,7 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
     const [availableFolders, setAvailableFolders] = useState([]);
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const { fileWatchers } = useFileWatcher();
 
     useEffect(() => {
         // Load recent folders from localStorage based on AI type
@@ -28,37 +30,23 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
         setError(null);
 
         try {
-            const basePath = aiType === 'kodu' 
-                ? 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks'
-                : 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/cline-ai.cline-dev/tasks';
-
-            const encodedPath = encodeURIComponent(basePath);
-            const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
-                credentials: 'include'
-            });
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Folders response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            const watcher = fileWatchers[aiType];
+            if (!watcher) {
+                throw new Error('File watcher not initialized');
             }
 
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to get folders');
+            const folders = await watcher.getSubfolders();
+            if (!folders.success) {
+                throw new Error(folders.error || 'Failed to get folders');
             }
 
-            setAvailableFolders(data.entries || []);
+            setAvailableFolders(folders.entries || []);
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folders fetched successfully', {
                 aiType,
-                folderCount: data.entries?.length
+                folderCount: folders.entries?.length
             });
         } catch (error) {
-            setError('Failed to load subfolders: ' + error.message);
+            setError('Failed to load folders: ' + error.message);
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error fetching folders', {
                 aiType,
                 error: error.message
