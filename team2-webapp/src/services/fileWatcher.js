@@ -11,8 +11,10 @@ class FileWatcher {
         this.retryCount = 0;
         this.maxRetries = 5;
         this.isConnected = false;
-        this.messageCache = new Map(); // Cache for message processing
+        this.messageCache = new Map();
         this.lastProcessedTimestamp = null;
+        this.reconnectTimeout = null;
+        this.isDestroyed = false;
     }
 
     setBasePath(path, taskFolder = '') {
@@ -178,17 +180,25 @@ class FileWatcher {
     setupSocket() {
         if (this.socket) {
             this.socket.disconnect();
+            this.socket = null;
         }
+
+        if (this.isDestroyed) return;
 
         this.socket = io('http://localhost:3002', {
             withCredentials: true,
             reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            reconnectionAttempts: 5
+            reconnectionDelay: Math.min(1000 * Math.pow(2, this.retryCount), 10000), // Exponential backoff
+            reconnectionDelayMax: 10000,
+            reconnectionAttempts: this.maxRetries
         });
         
         this.socket.on('connect', () => {
+            if (this.isDestroyed) {
+                this.socket.disconnect();
+                return;
+            }
+
             this.retryCount = 0;
             this.isConnected = true;
             if (this.onConnectionChange) {
@@ -201,17 +211,24 @@ class FileWatcher {
             this.retryCount++;
             if (this.retryCount >= this.maxRetries) {
                 this.socket.disconnect();
+                if (this.onConnectionChange) {
+                    this.onConnectionChange(false);
+                }
             }
         });
 
         let updateTimeout = null;
         this.socket.on('fileUpdated', () => {
+            if (this.isDestroyed) return;
+
             // Debounce updates
             if (updateTimeout) {
                 clearTimeout(updateTimeout);
             }
             updateTimeout = setTimeout(() => {
-                this.checkAndUpdate();
+                if (!this.isDestroyed) {
+                    this.checkAndUpdate();
+                }
             }, 1000);
         });
 
@@ -226,6 +243,10 @@ class FileWatcher {
     async start() {
         if (!this.basePath) {
             throw new Error('Base path must be set');
+        }
+
+        if (this.isDestroyed) {
+            throw new Error('FileWatcher has been destroyed');
         }
 
         const currentBasePath = this.basePath;
@@ -245,7 +266,7 @@ class FileWatcher {
     }
 
     async checkAndUpdate() {
-        if (!this.basePath || !this.taskFolder) return;
+        if (!this.basePath || !this.taskFolder || this.isDestroyed) return;
 
         try {
             const [claudeMessages, apiMessages] = await Promise.all([
@@ -253,7 +274,7 @@ class FileWatcher {
                 this.readFile('api')
             ]);
 
-            if (this.onUpdate) {
+            if (this.onUpdate && !this.isDestroyed) {
                 if (claudeMessages?.length) {
                     this.onUpdate('claude', claudeMessages);
                 }
@@ -273,6 +294,10 @@ class FileWatcher {
             this.socket.disconnect();
             this.socket = null;
         }
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
         this.lastProcessedTimestamp = null;
         this.retryCount = 0;
         this.isConnected = false;
@@ -280,6 +305,12 @@ class FileWatcher {
             this.onConnectionChange(false);
         }
         return this;
+    }
+
+    destroy() {
+        this.isDestroyed = true;
+        this.stop();
+        this.messageCache.clear();
     }
 }
 
