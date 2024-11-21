@@ -3,7 +3,6 @@ import FileWatcher from './services/fileWatcher';
 import MessageList from './components/MessageList';
 import DevManagerDashboard from './components/DevManagerDashboard';
 import ProjectOwnerDashboard from './components/ProjectOwnerDashboard';
-import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 import FileExplorer from './components/FileExplorer';
 import { debugLogger, DEBUG_LEVELS } from './utils/debug';
@@ -11,7 +10,6 @@ import { processMessageContent } from './utils/messageProcessor';
 import './App.css';
 
 const COMPONENT = 'App';
-const PATH_SEPARATOR = navigator.platform.toLowerCase().includes('win') ? '\\' : '/';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -257,11 +255,6 @@ function App() {
     return true;
   };
 
-  const getDisplayPath = () => {
-    if (!monitoringConfig.basePath || !monitoringConfig.taskFolder) return '';
-    return `${monitoringConfig.basePath}${PATH_SEPARATOR}${monitoringConfig.taskFolder}`;
-  };
-
   const renderContent = () => {
     switch (activeTab) {
       case 'kodu':
@@ -275,10 +268,10 @@ function App() {
                   Please configure both the path and task folder for {activeTab === 'kodu' ? 'Kodu' : 'Cline'} AI in settings.
                 </p>
                 <button
-                  onClick={() => setActiveTab('settings')}
+                  onClick={() => setShowDebug(true)}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
-                  Go to Settings
+                  Show Debug Panel
                 </button>
               </div>
             </div>
@@ -301,27 +294,6 @@ function App() {
                       Last updated: {lastUpdated.toLocaleTimeString()}
                     </div>
                   )}
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                      <span className="text-gray-700">Advanced Mode</span>
-                      <div className="relative">
-                        <input
-                          type="checkbox"
-                          checked={advancedMode}
-                          onChange={() => setAdvancedMode(!advancedMode)}
-                          className="sr-only"
-                        />
-                        <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                      </div>
-                    </label>
-                    <div 
-                      className="text-sm text-gray-600 cursor-help"
-                      title={getDisplayPath()}
-                    >
-                      {monitoringConfig.taskFolder}
-                    </div>
-                  </div>
                 </div>
                 {error && (
                   <div className="mt-2 text-center p-2 bg-red-100 text-red-700 rounded">
@@ -333,8 +305,15 @@ function App() {
                 <MessageList 
                   messages={messages}
                   advancedMode={advancedMode}
+                  onAdvancedModeChange={setAdvancedMode}
                   className="h-full"
                   onFileClick={handleFileClick}
+                  taskFolder={monitoringConfig.taskFolder}
+                  onTaskFolderChange={(folder) => handlePathsUpdate({
+                    ...monitoringConfig,
+                    koduTaskFolder: folder,
+                    enabledAIs: { kodu: true, cline: false }
+                  })}
                 />
               </div>
             </div>
@@ -354,10 +333,10 @@ function App() {
                   Please configure a project path in settings.
                 </p>
                 <button
-                  onClick={() => setActiveTab('settings')}
+                  onClick={() => setShowDebug(true)}
                   className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
-                  Go to Settings
+                  Show Debug Panel
                 </button>
               </div>
             </div>
@@ -370,8 +349,6 @@ function App() {
             initialVersion={selectedVersion}
           />
         );
-      case 'settings':
-        return <Settings onSave={handlePathsUpdate} />;
       default:
         return null;
     }

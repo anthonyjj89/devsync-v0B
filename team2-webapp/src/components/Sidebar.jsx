@@ -6,11 +6,10 @@ const COMPONENT = 'Sidebar';
 
 const tabs = [
   { id: 'kodu', label: 'Kodu AI Dev', icon: '🤖' },
-  { id: 'cline', label: 'Cline AI Dev', icon: '💻' },
-  { id: 'dev-manager', label: 'Dev Manager', icon: '👨‍💻' },
-  { id: 'project-manager', label: 'Project Manager', icon: '📋' },
-  { id: 'files', label: 'Project Files', icon: '📁' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' }
+  { id: 'cline', label: 'Cline AI Dev', icon: '�' },
+  { id: 'dev-manager', label: 'Dev Manager', icon: '�‍💻' },
+  { id: 'project-manager', label: 'Project Manager', icon: '�' },
+  { id: 'files', label: 'Project Files', icon: '📁' }
 ];
 
 const Sidebar = ({ activeTab, onTabChange }) => {

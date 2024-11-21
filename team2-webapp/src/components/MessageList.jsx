@@ -1,6 +1,8 @@
 import PropTypes from 'prop-types';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import MessageBubble from './MessageBubble';
+import TaskFolderSelect from './TaskFolderSelect';
+import ChatSettings from './ChatSettings';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'MessageList';
@@ -134,8 +136,9 @@ TimelineItem.propTypes = {
   onFileClick: PropTypes.func
 };
 
-const MessageList = ({ messages = [], advancedMode = false, className = '', onFileClick }) => {
+const MessageList = ({ messages = [], advancedMode = false, className = '', onFileClick, taskFolder, onTaskFolderChange, onAdvancedModeChange }) => {
   const messagesEndRef = useRef(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -148,6 +151,13 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
       advancedMode
     });
   }, [messages, advancedMode]);
+
+  const handleSettingsSave = (config) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Settings updated', config);
+    if (config.koduTaskFolder !== taskFolder) {
+      onTaskFolderChange(config.koduTaskFolder);
+    }
+  };
 
   // Combine chat messages and file activities into a single chronological timeline
   const timelineItems = messages.reduce((acc, message) => {
@@ -185,6 +195,37 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
   return (
     <div className={`bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
       <div className="p-4 bg-gray-50 border-b">
+        <div className="flex items-center justify-between mb-2">
+          <TaskFolderSelect 
+            currentFolder={taskFolder}
+            onSelect={onTaskFolderChange}
+          />
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <span className="text-gray-700">Advanced Mode</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={advancedMode}
+                  onChange={(e) => onAdvancedModeChange(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${advancedMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+              </div>
+            </label>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-gray-600 hover:text-gray-800 rounded-full hover:bg-gray-100"
+              title="Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+        </div>
         <h2 className="font-bold text-lg">Activity Timeline</h2>
       </div>
       <div className="h-full overflow-y-auto synchronized-scroll">
@@ -210,6 +251,12 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      <ChatSettings
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSave={handleSettingsSave}
+      />
     </div>
   );
 };
@@ -226,7 +273,10 @@ MessageList.propTypes = {
   })),
   advancedMode: PropTypes.bool,
   className: PropTypes.string,
-  onFileClick: PropTypes.func
+  onFileClick: PropTypes.func,
+  taskFolder: PropTypes.string,
+  onTaskFolderChange: PropTypes.func,
+  onAdvancedModeChange: PropTypes.func
 };
 
 export default MessageList;
