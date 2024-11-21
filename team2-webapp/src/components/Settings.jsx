@@ -5,13 +5,16 @@ import FileWatcher from '../services/fileWatcher';
 
 const COMPONENT = 'Settings';
 
+// Default VSCode extension path
+const DEFAULT_VSCODE_PATH = 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks';
+
 const Settings = ({ onSave }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [config, setConfig] = useState({
-    koduPath: localStorage.getItem('koduAI.path') || '',
+    koduPath: localStorage.getItem('koduAI.path') || DEFAULT_VSCODE_PATH,
     koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
-    clinePath: localStorage.getItem('clineAI.path') || '',
+    clinePath: localStorage.getItem('clineAI.path') || DEFAULT_VSCODE_PATH,
     clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
     projectPath: localStorage.getItem('project.path') || '',
     enabledAIs: {
@@ -116,14 +119,14 @@ const Settings = ({ onSave }) => {
 
   const handleReset = () => {
     setConfig({
-      koduPath: localStorage.getItem('koduAI.path') || '',
-      koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
-      clinePath: localStorage.getItem('clineAI.path') || '',
-      clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
-      projectPath: localStorage.getItem('project.path') || '',
+      koduPath: DEFAULT_VSCODE_PATH,
+      koduTaskFolder: '',
+      clinePath: DEFAULT_VSCODE_PATH,
+      clineTaskFolder: '',
+      projectPath: '',
       enabledAIs: {
-        kodu: localStorage.getItem('koduAI.enabled') !== 'false',
-        cline: localStorage.getItem('clineAI.enabled') !== 'false'
+        kodu: true,
+        cline: false
       }
     });
     setError('');
@@ -278,6 +281,9 @@ const Settings = ({ onSave }) => {
                   onChange={(e) => setConfig(prev => ({ ...prev, koduPath: e.target.value }))}
                   disabled={loading}
                 />
+                <p className="mt-1 text-sm text-blue-600">
+                  Default path: {DEFAULT_VSCODE_PATH}
+                </p>
               </div>
 
               <div>
@@ -327,6 +333,9 @@ const Settings = ({ onSave }) => {
                   onChange={(e) => setConfig(prev => ({ ...prev, clinePath: e.target.value }))}
                   disabled={loading}
                 />
+                <p className="mt-1 text-sm text-purple-600">
+                  Default path: {DEFAULT_VSCODE_PATH}
+                </p>
               </div>
 
               <div>

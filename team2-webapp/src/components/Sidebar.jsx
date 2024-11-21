@@ -4,12 +4,27 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'Sidebar';
 
-const tabs = [
-  { id: 'kodu', label: 'Kodu AI Dev', icon: '🤖' },
-  { id: 'cline', label: 'Cline AI Dev', icon: '�' },
-  { id: 'dev-manager', label: 'Dev Manager', icon: '�‍💻' },
-  { id: 'project-manager', label: 'Project Manager', icon: '�' },
-  { id: 'files', label: 'Project Files', icon: '📁' }
+const sections = [
+  {
+    title: 'AI Assistants',
+    items: [
+      { id: 'kodu', label: 'Kodu AI Dev', icon: '🤖' },
+      { id: 'cline', label: 'Cline AI Dev', icon: '🦾' }
+    ]
+  },
+  {
+    title: 'Management',
+    items: [
+      { id: 'dev-manager', label: 'Dev Manager', icon: '👨‍💻' },
+      { id: 'project-manager', label: 'Project Manager', icon: '📊' }
+    ]
+  },
+  {
+    title: 'Tools',
+    items: [
+      { id: 'files', label: 'Project Files', icon: '📁' }
+    ]
+  }
 ];
 
 const Sidebar = ({ activeTab, onTabChange }) => {
@@ -71,27 +86,36 @@ const Sidebar = ({ activeTab, onTabChange }) => {
       </button>
 
       <nav className="flex-1">
-        {tabs.map(({ id, label, icon }) => (
-          <button
-            key={id}
-            onClick={() => handleTabClick(id)}
-            className={`
-              w-full 
-              p-4 
-              flex 
-              items-center 
-              gap-3 
-              hover:bg-gray-700
-              transition-colors
-              ${activeTab === id ? 'bg-gray-700' : ''}
-              ${collapsed ? 'justify-center' : 'justify-start'}
-            `}
-          >
-            <span className="text-xl">{icon}</span>
+        {sections.map((section) => (
+          <div key={section.title} className="mb-4">
             {!collapsed && (
-              <span className="text-sm font-medium">{label}</span>
+              <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {section.title}
+              </div>
             )}
-          </button>
+            {section.items.map(({ id, label, icon }) => (
+              <button
+                key={id}
+                onClick={() => handleTabClick(id)}
+                className={`
+                  w-full 
+                  p-4 
+                  flex 
+                  items-center 
+                  gap-3 
+                  hover:bg-gray-700
+                  transition-colors
+                  ${activeTab === id ? 'bg-gray-700' : ''}
+                  ${collapsed ? 'justify-center' : 'justify-start'}
+                `}
+              >
+                <span className="text-xl">{icon}</span>
+                {!collapsed && (
+                  <span className="text-sm font-medium">{label}</span>
+                )}
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
 
@@ -105,7 +129,7 @@ const Sidebar = ({ activeTab, onTabChange }) => {
 };
 
 Sidebar.propTypes = {
-  activeTab: PropTypes.oneOf(tabs.map(t => t.id)).isRequired,
+  activeTab: PropTypes.oneOf(sections.flatMap(s => s.items.map(i => i.id))).isRequired,
   onTabChange: PropTypes.func.isRequired
 };
 
