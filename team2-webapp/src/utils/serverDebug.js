@@ -1,3 +1,5 @@
+import process from 'process';
+
 // Debug levels
 export const DEBUG_LEVELS = {
     INFO: 'INFO',
@@ -10,9 +12,8 @@ export const DEBUG_LEVELS = {
 class DebugLogger {
     constructor() {
         this.startTimes = new Map();
-        // Use window location to determine if we're in development
-        this.debugEnabled = window.location.hostname === 'localhost';
-        this.logLevel = 'INFO';
+        this.debugEnabled = process.env.NODE_ENV !== 'production';
+        this.logLevel = process.env.LOG_LEVEL || 'INFO';
         this.logCache = new Map(); // Cache for recent logs to prevent duplicates
         this.cacheDuration = 1000; // 1 second cache duration
     }
@@ -106,42 +107,12 @@ class DebugLogger {
         return null;
     }
 
-    // Log state changes only if they're significant
-    logStateChange(component, prevState, newState) {
-        const changes = this.getStateChanges(prevState, newState);
-        if (Object.keys(changes).length > 0) {
-            this.log(DEBUG_LEVELS.DEBUG, component, 'State changed', { changes });
-        }
-    }
-
-    getStateChanges(prevState, newState) {
-        const changes = {};
-        const allKeys = new Set([...Object.keys(prevState), ...Object.keys(newState)]);
-        
-        for (const key of allKeys) {
-            if (prevState[key] !== newState[key]) {
-                changes[key] = {
-                    from: prevState[key],
-                    to: newState[key]
-                };
-            }
-        }
-        return changes;
-    }
-
-    // Log API requests only in development
-    logApiRequest(component, method, url) {
-        if (this.debugEnabled) {
-            this.log(DEBUG_LEVELS.DEBUG, component, `API Request: ${method} ${url}`);
-        }
-    }
-
-    // Log API responses only if they're errors or slow
-    logApiResponse(component, method, url, response, duration) {
-        if (response.status >= 400 || duration > 1000) {
-            this.log(DEBUG_LEVELS.WARN, component, `API Response: ${method} ${url}`, {
-                status: response.status,
-                duration: `${duration.toFixed(2)}ms`
+    // Log file operations only if they fail or are slow
+    logFileOperation(component, operation, path, result = null) {
+        if (result?.error || (result?.duration && result.duration > 1000)) {
+            this.log(DEBUG_LEVELS.WARN, component, `File Operation: ${operation}`, {
+                path,
+                result
             });
         }
     }
@@ -150,16 +121,6 @@ class DebugLogger {
     logSocketEvent(component, eventName, data = null) {
         if (eventName === 'error' || eventName === 'disconnect' || eventName === 'connect') {
             this.log(DEBUG_LEVELS.INFO, component, `Socket Event: ${eventName}`, data);
-        }
-    }
-
-    // Log file operations only if they fail or are slow
-    logFileOperation(component, operation, path, result = null) {
-        if (result?.error || (result?.duration && result.duration > 1000)) {
-            this.log(DEBUG_LEVELS.WARN, component, `File Operation: ${operation}`, {
-                path,
-                result
-            });
         }
     }
 }

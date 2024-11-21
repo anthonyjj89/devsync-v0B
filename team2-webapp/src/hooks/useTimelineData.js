@@ -3,21 +3,52 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'useTimelineData';
 
+// Cache for parsed tool data
+const toolDataCache = new Map();
+
+const parseToolData = (messageText) => {
+  const cacheKey = messageText;
+  if (toolDataCache.has(cacheKey)) {
+    return toolDataCache.get(cacheKey);
+  }
+
+  try {
+    const toolData = JSON.parse(messageText);
+    toolDataCache.set(cacheKey, toolData);
+
+    // Keep cache size manageable
+    if (toolDataCache.size > 1000) {
+      const oldestKey = toolDataCache.keys().next().value;
+      toolDataCache.delete(oldestKey);
+    }
+
+    return toolData;
+  } catch (error) {
+    return null;
+  }
+};
+
 const useTimelineData = (messages = [], aiType) => {
   const timelineItems = useMemo(() => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Processing timeline data', {
-      aiType,
-      messageCount: messages.length
-    });
+    // Only log when there are messages to process
+    if (messages.length > 0) {
+      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Processing timeline data', {
+        aiType,
+        messageCount: messages.length
+      });
+    }
 
     // Combine chat messages and file activities into a single chronological timeline
     const items = messages.reduce((acc, message) => {
+      // Normalize timestamp
+      const timestamp = message.ts || message.timestamp;
+
       // Handle different message formats
       if (message.type === 'say' && message.say === 'text') {
         // Add chat message with AI type
         acc.push({
           text: message.text,
-          timestamp: message.ts, // Use ts instead of timestamp
+          timestamp,
           type: 'chat',
           role: 'assistant',
           aiType,
@@ -25,10 +56,10 @@ const useTimelineData = (messages = [], aiType) => {
         });
       } else if (message.type === 'ask' && message.ask === 'tool') {
         // Add tool message
-        try {
-          const toolData = JSON.parse(message.text);
+        const toolData = parseToolData(message.text);
+        if (toolData) {
           acc.push({
-            timestamp: message.ts,
+            timestamp,
             type: 'file',
             tool: toolData.tool,
             path: toolData.path,
@@ -39,16 +70,12 @@ const useTimelineData = (messages = [], aiType) => {
             toolStatus: toolData.status,
             aiType
           });
-        } catch (error) {
-          debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error parsing tool data', {
-            error: error.message,
-            messageText: message.text
-          });
         }
       } else if (message.type === 'chat') {
         // Handle standard chat message format
         acc.push({
           ...message,
+          timestamp,
           type: 'chat',
           aiType
         });
@@ -63,7 +90,7 @@ const useTimelineData = (messages = [], aiType) => {
           toolInfo.tool === 'saveClaudeMessages'
         ) {
           acc.push({
-            timestamp: message.timestamp,
+            timestamp,
             type: 'file',
             tool: toolInfo.tool,
             path: toolInfo.path || toolInfo.filePath,
@@ -80,22 +107,8 @@ const useTimelineData = (messages = [], aiType) => {
       return acc;
     }, []);
 
-    // Sort items chronologically, handling both ts and timestamp properties
-    const sortedItems = items.sort((a, b) => {
-      const aTime = a.timestamp || a.ts;
-      const bTime = b.timestamp || b.ts;
-      return aTime - bTime;
-    });
-
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Timeline data processed', {
-      aiType,
-      messageCount: messages.length,
-      timelineItemCount: sortedItems.length,
-      firstItemType: sortedItems[0]?.type,
-      lastItemType: sortedItems[sortedItems.length - 1]?.type
-    });
-
-    return sortedItems;
+    // Sort items chronologically using normalized timestamp
+    return items.sort((a, b) => a.timestamp - b.timestamp);
   }, [messages, aiType]);
 
   return {

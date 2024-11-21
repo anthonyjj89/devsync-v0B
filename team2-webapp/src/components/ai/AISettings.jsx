@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../../utils/debug';
-import FileWatcher from '../../services/fileWatcher';
 
 const COMPONENT = 'AISettings';
 
@@ -35,19 +34,26 @@ const AISettings = ({ aiType, onSave }) => {
     setError('');
     
     try {
-      const watcher = new FileWatcher(null);
-      watcher.setBasePath(config.basePath); // Set the base path before getting subfolders
-      const result = await watcher.getSubfolders();
+      const encodedPath = encodeURIComponent(config.basePath);
+      const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-      if (result.success && Array.isArray(result.entries)) {
-        setSubfolders(result.entries);
+      if (data.success && Array.isArray(data.entries)) {
+        setSubfolders(data.entries);
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Loaded subfolders', {
           path: config.basePath,
           aiType,
-          folderCount: result.entries.length
+          folderCount: data.entries.length
         });
       } else {
-        throw new Error(result.error || 'Failed to load subfolders');
+        throw new Error(data.error || 'Failed to load subfolders');
       }
     } catch (err) {
       setError(`Failed to load subfolders: ${err.message}`);
