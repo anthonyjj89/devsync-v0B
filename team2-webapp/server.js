@@ -64,7 +64,7 @@ function joinPaths(...paths) {
 }
 
 // Helper function to extract messages from JSON file
-async function readMessagesFromFile(filePath, aiType) {
+async function readMessagesFromFile(filePath) {
     try {
         const content = await fs.promises.readFile(filePath, 'utf8');
         const data = JSON.parse(content);
@@ -72,23 +72,19 @@ async function readMessagesFromFile(filePath, aiType) {
         // Handle both array format and {messages: [...]} format
         const messages = Array.isArray(data) ? data : (data.messages || []);
         
-        // Add AI type to each message
-        const processedMessages = messages.map(msg => ({
-            ...msg,
-            aiType
-        }));
+        // Filter out null/undefined messages but keep all valid objects
+        const validMessages = messages.filter(msg => msg !== null && typeof msg === 'object');
         
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Read messages from file', {
             filePath,
-            aiType,
-            messageCount: processedMessages.length
+            originalCount: messages.length,
+            validCount: validMessages.length
         });
         
-        return processedMessages;
+        return validMessages;
     } catch (error) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading messages from file', {
             filePath,
-            aiType,
             error: error.message
         });
         return [];
@@ -285,52 +281,12 @@ app.get('/api/validate-path', async (req, res) => {
     }
 });
 
-// Add validate-project-path endpoint
-app.get('/api/validate-project-path', async (req, res) => {
-    const requestId = `validate-project-path-${Date.now()}`;
-    debugLogger.startTimer(requestId);
-    
-    const { path: rawPath } = req.query;
-    if (!rawPath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing project path parameter');
-        return res.json({ success: false, error: 'Project path is required' });
-    }
-
-    const projectPath = normalizePath(rawPath);
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating project path', { projectPath });
-
-    try {
-        // Check if path exists and is accessible
-        await fs.promises.access(projectPath);
-        
-        // Check if it's a directory
-        const stats = await fs.promises.stat(projectPath);
-        if (!stats.isDirectory()) {
-            throw new Error('Path must be a directory');
-        }
-
-        const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validation successful', {
-            projectPath,
-            durationMs: duration
-        });
-        
-        res.json({ success: true });
-    } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation error', error);
-        res.json({
-            success: false,
-            error: `Failed to validate project path: ${error.message}`
-        });
-    }
-});
-
 // Updated API endpoints to handle task folders
 app.get('/api/claude-messages', async (req, res) => {
     const requestId = `fetch-claude-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const { basePath: rawBasePath, taskFolder, aiType } = req.query;
+    const { basePath: rawBasePath, taskFolder } = req.query;
     if (!rawBasePath || !taskFolder) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
         return res.json({ error: 'Both base path and task folder are required' });
@@ -338,20 +294,18 @@ app.get('/api/claude-messages', async (req, res) => {
 
     const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
     const filePath = joinPaths(basePath, CLAUDE_MESSAGES_PATH);
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath, aiType });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath });
 
     try {
-        const messages = await readMessagesFromFile(filePath, aiType);
+        const messages = await readMessagesFromFile(filePath);
         
         debugLogger.logFileOperation(COMPONENT, 'READ_CLAUDE', filePath, {
-            messageCount: messages.length,
-            aiType
+            messageCount: messages.length
         });
         
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Claude messages read successfully', {
             messageCount: messages.length,
-            aiType,
             durationMs: duration
         });
         
@@ -366,7 +320,7 @@ app.get('/api/api-messages', async (req, res) => {
     const requestId = `fetch-api-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const { basePath: rawBasePath, taskFolder, aiType } = req.query;
+    const { basePath: rawBasePath, taskFolder } = req.query;
     if (!rawBasePath || !taskFolder) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
         return res.json({ error: 'Both base path and task folder are required' });
@@ -374,20 +328,18 @@ app.get('/api/api-messages', async (req, res) => {
 
     const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
     const filePath = joinPaths(basePath, API_HISTORY_PATH);
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath, aiType });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath });
 
     try {
-        const messages = await readMessagesFromFile(filePath, aiType);
+        const messages = await readMessagesFromFile(filePath);
         
         debugLogger.logFileOperation(COMPONENT, 'READ_API', filePath, {
-            messageCount: messages.length,
-            aiType
+            messageCount: messages.length
         });
         
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'API messages read successfully', {
             messageCount: messages.length,
-            aiType,
             durationMs: duration
         });
         
@@ -427,8 +379,13 @@ app.get('/api/last-updated', async (req, res) => {
         
         res.json({ timestamp: timestamp.trim() });
     } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading timestamp', error);
-        res.json({ error: 'Error reading last updated file' });
+        // Return current timestamp if file doesn't exist or can't be read
+        const currentTimestamp = new Date().toISOString();
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (error)', {
+            timestamp: currentTimestamp,
+            error: error.message
+        });
+        res.json({ timestamp: currentTimestamp });
     }
 });
 

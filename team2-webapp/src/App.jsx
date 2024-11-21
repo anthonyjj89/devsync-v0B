@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import AIView from './components/views/AIView';
 import ConfigurationRequired from './components/views/ConfigurationRequired';
@@ -33,7 +33,8 @@ const AppContent = () => {
     messages,
     error: watcherError,
     activeAI,
-    setActiveAI
+    setActiveAI,
+    initializeWatcher
   } = useFileWatcher();
 
   const {
@@ -41,6 +42,29 @@ const AppContent = () => {
     debugLogs,
     toggleDebug
   } = useDebugLogs();
+
+  // Initialize watcher when configuration changes
+  useEffect(() => {
+    const initializeActiveAI = async () => {
+      if (activeAI === 'kodu' && monitoringConfig.koduTaskFolder) {
+        const config = {
+          basePath: monitoringConfig.koduPath,
+          taskFolder: monitoringConfig.koduTaskFolder,
+          projectPath: monitoringConfig.projectPath
+        };
+        await initializeWatcher(config, 'kodu');
+      } else if (activeAI === 'cline' && monitoringConfig.clineTaskFolder) {
+        const config = {
+          basePath: monitoringConfig.clinePath,
+          taskFolder: monitoringConfig.clineTaskFolder,
+          projectPath: monitoringConfig.projectPath
+        };
+        await initializeWatcher(config, 'cline');
+      }
+    };
+
+    initializeActiveAI();
+  }, [activeAI, monitoringConfig, initializeWatcher]);
 
   const handleFileClick = (filePath, version) => {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File clicked', {

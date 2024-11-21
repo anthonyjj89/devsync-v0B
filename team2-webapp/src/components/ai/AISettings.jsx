@@ -35,7 +35,8 @@ const AISettings = ({ aiType, onSave }) => {
     setError('');
     
     try {
-      const watcher = new FileWatcher(null, aiType);
+      const watcher = new FileWatcher(null);
+      watcher.setBasePath(config.basePath); // Set the base path before getting subfolders
       const result = await watcher.getSubfolders();
       
       if (result.success && Array.isArray(result.entries)) {

@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
-import { useFileWatcher } from '../contexts/FileWatcherContext';
+import FileWatcher from '../services/fileWatcher';
 
 const COMPONENT = 'TaskFolderSelect';
+
+const AI_PATHS = {
+    kodu: 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks',
+    cline: 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/cline-ai.cline-dev/tasks'
+};
 
 function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -11,7 +16,6 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
     const [availableFolders, setAvailableFolders] = useState([]);
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-    const { fileWatchers } = useFileWatcher();
 
     useEffect(() => {
         // Load recent folders from localStorage based on AI type
@@ -30,10 +34,9 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
         setError(null);
 
         try {
-            const watcher = fileWatchers[aiType];
-            if (!watcher) {
-                throw new Error('File watcher not initialized');
-            }
+            const watcher = new FileWatcher(null);
+            const basePath = localStorage.getItem(`${aiType}AI.path`) || AI_PATHS[aiType];
+            watcher.setBasePath(basePath);
 
             const folders = await watcher.getSubfolders();
             if (!folders.success) {

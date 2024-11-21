@@ -18,42 +18,56 @@ export const FileWatcherProvider = ({ children }) => {
   const [error, setError] = useState('');
   const [activeAI, setActiveAI] = useState('kodu');
 
-  const createFileWatcher = useCallback((aiType) => {
-    return new FileWatcher((type, data) => {
-      const updateId = `update-${aiType}-${type}-${Date.now()}`;
-      debugLogger.startTimer(updateId);
+  const handleConnectionChange = useCallback((connected) => {
+    setIsMonitoring(connected);
+    if (!connected) {
+      setError('Disconnected from server');
+    } else {
+      setError('');
+    }
+  }, []);
 
-      try {
-        setLastUpdated(new Date());
-        
-        const processedData = data?.filter(Boolean) || [];
-        
-        // Only update messages if this is the active AI
-        if (aiType === activeAI) {
-          setMessages(processedData);
-          debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Messages updated', {
+  const createFileWatcher = useCallback((aiType) => {
+    return new FileWatcher(
+      // onUpdate callback
+      (type, data) => {
+        const updateId = `update-${aiType}-${type}-${Date.now()}`;
+        debugLogger.startTimer(updateId);
+
+        try {
+          setLastUpdated(new Date());
+          
+          const processedData = data?.filter(Boolean) || [];
+          
+          // Only update messages if this is the active AI
+          if (aiType === activeAI) {
+            setMessages(processedData);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Messages updated', {
+              messageType: type,
+              aiType,
+              count: processedData.length
+            });
+          }
+          
+          setError('');
+
+          const duration = debugLogger.endTimer(updateId, COMPONENT);
+          debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${aiType} messages update completed`, {
             messageType: type,
             aiType,
-            count: processedData.length
+            messageCount: processedData.length,
+            durationMs: duration
           });
+        } catch (err) {
+          const errorMsg = `Error processing ${aiType} messages: ${err.message}`;
+          debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
+          setError(errorMsg);
         }
-        
-        setError('');
-
-        const duration = debugLogger.endTimer(updateId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${aiType} messages update completed`, {
-          messageType: type,
-          aiType,
-          messageCount: processedData.length,
-          durationMs: duration
-        });
-      } catch (err) {
-        const errorMsg = `Error processing ${aiType} messages: ${err.message}`;
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
-        setError(errorMsg);
-      }
-    });
-  }, [activeAI]);
+      },
+      // onConnectionChange callback
+      handleConnectionChange
+    );
+  }, [activeAI, handleConnectionChange]);
 
   const initializeWatcher = useCallback(async (config, aiType) => {
     try {
@@ -88,9 +102,7 @@ export const FileWatcherProvider = ({ children }) => {
       }));
 
       setActiveAI(aiType);
-      setIsMonitoring(true);
       setLastUpdated(new Date());
-      setError('');
       setMessages([]); // Clear messages when switching AI
 
       debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully started monitoring', {
