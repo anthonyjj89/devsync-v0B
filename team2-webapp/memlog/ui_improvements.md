@@ -24,6 +24,7 @@
   - Cline AI
 - Validation to ensure at least one AI is always enabled
 - Persistent storage of AI preferences
+- Fixed action buttons at top with scrollable content below
 
 ### Path Management
 - Input fields for AI task paths:
@@ -66,6 +67,7 @@
 - Responsive layout
 - Smooth transitions
 - Clear visual hierarchy
+- Settings page vertical scrolling with proper overflow handling
 
 ### File Explorer
 - Manual refresh button for project files list
