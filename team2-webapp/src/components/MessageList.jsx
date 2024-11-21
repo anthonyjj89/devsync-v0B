@@ -10,6 +10,7 @@ import useMessageSettings from '../hooks/useMessageSettings';
 const COMPONENT = 'MessageList';
 
 const MessageList = ({
+  aiType,
   messages = [],
   className = '',
   onFileClick,
@@ -18,7 +19,7 @@ const MessageList = ({
   onAdvancedModeChange
 }) => {
   const messagesEndRef = useRef(null);
-  const { timelineItems, isEmpty } = useTimelineData(messages);
+  const { timelineItems, isEmpty } = useTimelineData(messages, aiType);
   const {
     showSettings,
     advancedMode,
@@ -26,6 +27,7 @@ const MessageList = ({
     toggleSettings,
     toggleAdvancedMode
   } = useMessageSettings({
+    aiType,
     taskFolder,
     onTaskFolderChange
   });
@@ -37,10 +39,11 @@ const MessageList = ({
   useEffect(() => {
     scrollToBottom();
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Rendering messages', {
+      aiType,
       messageCount: messages.length,
       advancedMode
     });
-  }, [messages, advancedMode]);
+  }, [messages, advancedMode, aiType]);
 
   // Sync advanced mode with parent component
   useEffect(() => {
@@ -52,6 +55,7 @@ const MessageList = ({
       <div className="p-4 bg-gray-50 border-b sticky top-0 z-50">
         <div className="flex items-center justify-between mb-2">
           <TaskFolderSelect 
+            aiType={aiType}
             currentFolder={taskFolder}
             onSelect={onTaskFolderChange}
           />
@@ -81,7 +85,9 @@ const MessageList = ({
             </button>
           </div>
         </div>
-        <h2 className="font-bold text-lg">Activity Timeline</h2>
+        <h2 className="font-bold text-lg">
+          {aiType === 'kodu' ? 'Kodu AI' : 'Cline AI'} Messages
+        </h2>
       </div>
       <div className="h-full overflow-y-auto">
         <div className="px-4 py-6 relative">
@@ -100,7 +106,7 @@ const MessageList = ({
             </div>
           ) : (
             <div className="text-center text-gray-500">
-              No activity to display
+              No messages to display
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -108,6 +114,7 @@ const MessageList = ({
       </div>
 
       <ChatSettings
+        aiType={aiType}
         isOpen={showSettings}
         onClose={toggleSettings}
         onSave={handleSettingsSave}
@@ -117,6 +124,7 @@ const MessageList = ({
 };
 
 MessageList.propTypes = {
+  aiType: PropTypes.oneOf(['kodu', 'cline']).isRequired,
   messages: PropTypes.arrayOf(PropTypes.shape({
     role: PropTypes.string,
     text: PropTypes.string,

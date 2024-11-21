@@ -4,23 +4,81 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'TaskFolderSelect';
 
-function TaskFolderSelect({ currentFolder, onSelect }) {
+function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
     const [isOpen, setIsOpen] = useState(false);
     const [recentFolders, setRecentFolders] = useState([]);
+    const [availableFolders, setAvailableFolders] = useState([]);
+    const [error, setError] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        // Load recent folders from localStorage
-        const recent = JSON.parse(localStorage.getItem('recentTaskFolders') || '[]');
+        // Load recent folders from localStorage based on AI type
+        const recent = JSON.parse(localStorage.getItem(`${aiType}AI.recentTaskFolders`) || '[]');
         setRecentFolders(recent);
-    }, []);
+    }, [aiType]);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchAvailableFolders();
+        }
+    }, [isOpen]);
+
+    const fetchAvailableFolders = async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const basePath = aiType === 'kodu' 
+                ? 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks'
+                : 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/cline-ai.cline-dev/tasks';
+
+            const encodedPath = encodeURIComponent(basePath);
+            const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
+                credentials: 'include'
+            });
+
+            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Folders response received', {
+                status: response.status,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get folders');
+            }
+
+            setAvailableFolders(data.entries || []);
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folders fetched successfully', {
+                aiType,
+                folderCount: data.entries?.length
+            });
+        } catch (error) {
+            setError('Failed to load subfolders: ' + error.message);
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error fetching folders', {
+                aiType,
+                error: error.message
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleSelect = (folder) => {
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected task folder', { folder });
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected task folder', {
+            aiType,
+            folder
+        });
         
-        // Update recent folders
-        const recent = JSON.parse(localStorage.getItem('recentTaskFolders') || '[]');
+        // Update recent folders for this AI
+        const recent = JSON.parse(localStorage.getItem(`${aiType}AI.recentTaskFolders`) || '[]');
         const updated = [folder, ...recent.filter(f => f !== folder)].slice(0, 5);
-        localStorage.setItem('recentTaskFolders', JSON.stringify(updated));
+        localStorage.setItem(`${aiType}AI.recentTaskFolders`, JSON.stringify(updated));
+        setRecentFolders(updated);
         
         onSelect(folder);
         setIsOpen(false);
@@ -45,20 +103,55 @@ function TaskFolderSelect({ currentFolder, onSelect }) {
 
             {isOpen && (
                 <div className="absolute top-full mt-1 w-64 bg-white border rounded-md shadow-lg z-50">
+                    {error && (
+                        <div className="p-2 text-sm text-red-600 bg-red-50 border-b">
+                            {error}
+                        </div>
+                    )}
                     <div className="py-1">
-                        {recentFolders.length > 0 ? (
-                            recentFolders.map((folder, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => handleSelect(folder)}
-                                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-                                >
-                                    {folder}
-                                </button>
-                            ))
+                        {isLoading ? (
+                            <div className="px-4 py-2 text-sm text-gray-500">
+                                Loading folders...
+                            </div>
+                        ) : availableFolders.length > 0 ? (
+                            <>
+                                {availableFolders.map((folder, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleSelect(folder)}
+                                        className={`
+                                            w-full px-4 py-2 text-left text-sm 
+                                            hover:bg-gray-100
+                                            ${currentFolder === folder ? 'bg-blue-50 text-blue-600' : ''}
+                                        `}
+                                    >
+                                        {folder}
+                                    </button>
+                                ))}
+                                {recentFolders.length > 0 && (
+                                    <div className="border-t mt-1 pt-1">
+                                        <div className="px-4 py-1 text-xs text-gray-500 uppercase">
+                                            Recent
+                                        </div>
+                                        {recentFolders.map((folder, index) => (
+                                            <button
+                                                key={`recent-${index}`}
+                                                onClick={() => handleSelect(folder)}
+                                                className={`
+                                                    w-full px-4 py-2 text-left text-sm 
+                                                    hover:bg-gray-100
+                                                    ${currentFolder === folder ? 'bg-blue-50 text-blue-600' : ''}
+                                                `}
+                                            >
+                                                {folder}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="px-4 py-2 text-sm text-gray-500">
-                                No recent folders
+                                No folders found for {aiType === 'kodu' ? 'Kodu' : 'Cline'} AI
                             </div>
                         )}
                     </div>
@@ -69,6 +162,7 @@ function TaskFolderSelect({ currentFolder, onSelect }) {
 }
 
 TaskFolderSelect.propTypes = {
+    aiType: PropTypes.oneOf(['kodu', 'cline']).isRequired,
     currentFolder: PropTypes.string,
     onSelect: PropTypes.func.isRequired
 };

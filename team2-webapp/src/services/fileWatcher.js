@@ -7,7 +7,7 @@ import FileHistory from './file/FileHistory';
 const COMPONENT = 'FileWatcher';
 
 class FileWatcher {
-    constructor(onUpdate) {
+    constructor(onUpdate, aiType = 'kodu') {
         this.onUpdate = onUpdate;
         this.intervalId = null;
         this.lastTimestamp = null;
@@ -17,6 +17,7 @@ class FileWatcher {
         this.socket = null;
         this.retryCount = 0;
         this.maxRetries = 5;
+        this.aiType = aiType;
 
         // Initialize service modules
         this.pathValidation = new PathValidation();
@@ -29,7 +30,8 @@ class FileWatcher {
         });
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcher instance created', {
-            maxRetries: this.maxRetries
+            maxRetries: this.maxRetries,
+            aiType: this.aiType
         });
     }
 
@@ -41,7 +43,8 @@ class FileWatcher {
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Paths set', {
             basePath: this.basePath,
-            taskFolder: this.taskFolder
+            taskFolder: this.taskFolder,
+            aiType: this.aiType
         });
         return this;  // Return this to allow method chaining
     }
@@ -51,7 +54,16 @@ class FileWatcher {
         this.pathValidation.setProjectPath(path);
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path set', {
-            projectPath: this.projectPath
+            projectPath: this.projectPath,
+            aiType: this.aiType
+        });
+        return this;
+    }
+
+    setAIType(aiType) {
+        this.aiType = aiType;
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'AI type set', {
+            aiType: this.aiType
         });
         return this;
     }
@@ -77,7 +89,7 @@ class FileWatcher {
     }
 
     async readFile(type) {
-        return this.fileOperations.readFile(type);
+        return this.fileOperations.readFile(type, this.aiType);
     }
 
     async checkLastUpdated() {
@@ -98,14 +110,16 @@ class FileWatcher {
         const currentBasePath = this.basePath;
         const currentTaskFolder = this.taskFolder;
         const currentProjectPath = this.projectPath;
+        const currentAIType = this.aiType;
 
         // Stop any existing interval and socket
         this.stop();
 
-        // Restore the paths
+        // Restore the paths and AI type
         this.basePath = currentBasePath;
         this.taskFolder = currentTaskFolder;
         this.projectPath = currentProjectPath;
+        this.aiType = currentAIType;
         this.pathValidation.setBasePath(currentBasePath, currentTaskFolder);
         if (currentProjectPath) {
             this.pathValidation.setProjectPath(currentProjectPath);
@@ -114,7 +128,8 @@ class FileWatcher {
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file monitoring', {
             basePath: this.basePath,
             taskFolder: this.taskFolder,
-            projectPath: this.projectPath
+            projectPath: this.projectPath,
+            aiType: this.aiType
         });
 
         // Set up Socket.IO connection
@@ -149,17 +164,21 @@ class FileWatcher {
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Update check completed', {
                 claudeMessagesCount: claudeMessages?.length,
                 apiMessagesCount: apiMessages?.length,
+                aiType: this.aiType,
                 durationMs: duration
             });
         } catch (error) {
             debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error during file read', {
-                error: error.message
+                error: error.message,
+                aiType: this.aiType
             });
         }
     }
 
     stop() {
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping file monitoring');
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping file monitoring', {
+            aiType: this.aiType
+        });
 
         if (this.intervalId) {
             clearInterval(this.intervalId);
@@ -172,7 +191,9 @@ class FileWatcher {
         this.lastTimestamp = null;
         this.retryCount = 0;
 
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File monitoring stopped');
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File monitoring stopped', {
+            aiType: this.aiType
+        });
         return this;
     }
 }

@@ -31,7 +31,9 @@ const AppContent = () => {
     isMonitoring,
     lastUpdated,
     messages,
-    error: watcherError
+    error: watcherError,
+    activeAI,
+    setActiveAI
   } = useFileWatcher();
 
   const {
@@ -50,39 +52,60 @@ const AppContent = () => {
     setActiveTab('files');
   };
 
-  const renderContent = () => {
-    const error = pathError || watcherError;
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    // Update active AI when switching between AI tabs
+    if (tab === 'kodu' || tab === 'cline') {
+      setActiveAI(tab);
+    }
+  };
 
+  const renderAIView = (aiType) => {
+    if (!isPathConfigured(aiType)) {
+      return (
+        <ConfigurationRequired
+          aiType={aiType}
+          onShowDebug={toggleDebug}
+        />
+      );
+    }
+
+    const error = pathError || watcherError;
+    const aiConfig = {
+      ...monitoringConfig,
+      taskFolder: monitoringConfig[`${aiType}TaskFolder`] || '',
+      basePath: monitoringConfig[`${aiType}Path`] || ''
+    };
+
+    return (
+      <AIView
+        aiType={aiType}
+        isMonitoring={isMonitoring}
+        lastUpdated={lastUpdated}
+        error={error}
+        messages={messages}
+        advancedMode={advancedMode}
+        onAdvancedModeChange={setAdvancedMode}
+        showDebug={showDebug}
+        onFileClick={handleFileClick}
+        monitoringConfig={aiConfig}
+        onTaskFolderChange={handlePathsUpdate}
+      />
+    );
+  };
+
+  const renderContent = () => {
     switch (activeTab) {
       case 'kodu':
       case 'cline':
-        if (!isPathConfigured(activeTab)) {
-          return (
-            <ConfigurationRequired
-              aiType={activeTab}
-              onShowDebug={toggleDebug}
-            />
-          );
-        }
-
-        return (
-          <AIView
-            isMonitoring={isMonitoring}
-            lastUpdated={lastUpdated}
-            error={error}
-            messages={messages}
-            advancedMode={advancedMode}
-            onAdvancedModeChange={setAdvancedMode}
-            showDebug={showDebug}
-            onFileClick={handleFileClick}
-            monitoringConfig={monitoringConfig}
-            onTaskFolderChange={handlePathsUpdate}
-          />
-        );
+        return renderAIView(activeTab);
+      
       case 'dev-manager':
         return <DevManagerDashboard messages={messages} />;
+      
       case 'project-manager':
         return <ProjectOwnerDashboard messages={messages} />;
+      
       case 'files':
         if (!isPathConfigured(activeTab)) {
           return (
@@ -99,6 +122,7 @@ const AppContent = () => {
             initialVersion={selectedVersion}
           />
         );
+      
       default:
         return null;
     }
@@ -110,6 +134,7 @@ const AppContent = () => {
     messagesCount: messages.length,
     debugLogsCount: debugLogs.length,
     activeTab,
+    activeAI,
     monitoringConfig,
     advancedMode
   });
@@ -118,9 +143,7 @@ const AppContent = () => {
     <div className="flex h-screen bg-gray-100">
       <Sidebar 
         activeTab={activeTab}
-        onTabChange={tab => {
-          setActiveTab(tab);
-        }}
+        onTabChange={handleTabChange}
       />
       <main className="flex-1 flex flex-col overflow-hidden">
         {renderContent()}

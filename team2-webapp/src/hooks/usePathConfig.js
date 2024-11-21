@@ -3,14 +3,20 @@ import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
 
 const COMPONENT = 'usePathConfig';
 
+const DEFAULT_VSCODE_PATH = 'C:/Users/antho/AppData/Roaming/Code/User/globalStorage/kodu-ai.claude-dev-experimental/tasks';
+
 const usePathConfig = () => {
   const [monitoringConfig, setMonitoringConfig] = useState(() => {
-    const koduPath = localStorage.getItem('koduAI.path');
-    const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
     return {
-      basePath: koduPath || '',
-      taskFolder: koduTaskFolder || '',
-      projectPath: localStorage.getItem('project.path') || ''
+      koduPath: localStorage.getItem('koduAI.path') || DEFAULT_VSCODE_PATH,
+      koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
+      clinePath: localStorage.getItem('clineAI.path') || DEFAULT_VSCODE_PATH,
+      clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
+      projectPath: localStorage.getItem('project.path') || '',
+      enabledAIs: {
+        kodu: localStorage.getItem('koduAI.enabled') !== 'false',
+        cline: localStorage.getItem('clineAI.enabled') !== 'false'
+      }
     };
   });
 
@@ -26,71 +32,74 @@ const usePathConfig = () => {
       newConfig
     });
 
-    // Determine which AI to use based on enabled state and path changes
-    let basePath = '';
-    let taskFolder = '';
-    let aiType = '';
-
-    if (newConfig.enabledAIs.kodu && newConfig.koduPath && newConfig.koduTaskFolder) {
-      const koduPathChanged = newConfig.koduPath !== localStorage.getItem('koduAI.path') ||
-                           newConfig.koduTaskFolder !== localStorage.getItem('koduAI.taskFolder');
-      
-      if (!newConfig.enabledAIs.cline || koduPathChanged) {
-        basePath = newConfig.koduPath;
-        taskFolder = newConfig.koduTaskFolder;
-        aiType = 'kodu';
+    try {
+      // Validate paths
+      if (!newConfig.projectPath && newConfig.projectPath !== monitoringConfig.projectPath) {
+        throw new Error('Project path is required');
       }
-    }
 
-    if (newConfig.enabledAIs.cline && newConfig.clinePath && newConfig.clineTaskFolder && !basePath) {
-      basePath = newConfig.clinePath;
-      taskFolder = newConfig.clineTaskFolder;
-      aiType = 'cline';
-    }
+      if (newConfig.enabledAIs?.kodu && (!newConfig.koduPath || !newConfig.koduTaskFolder)) {
+        throw new Error('Kodu AI path and task folder are required when enabled');
+      }
 
-    if (!basePath || !taskFolder) {
-      const errorMsg = 'No valid AI configuration found. Please enable and configure at least one AI.';
+      if (newConfig.enabledAIs?.cline && (!newConfig.clinePath || !newConfig.clineTaskFolder)) {
+        throw new Error('Cline AI path and task folder are required when enabled');
+      }
+
+      // Update only the changed values
+      const updatedConfig = {
+        ...monitoringConfig,
+        ...newConfig
+      };
+
+      // Save to localStorage
+      if (newConfig.projectPath) {
+        localStorage.setItem('project.path', newConfig.projectPath);
+      }
+      if (newConfig.koduPath) {
+        localStorage.setItem('koduAI.path', newConfig.koduPath);
+      }
+      if (newConfig.koduTaskFolder) {
+        localStorage.setItem('koduAI.taskFolder', newConfig.koduTaskFolder);
+      }
+      if (newConfig.enabledAIs?.kodu !== undefined) {
+        localStorage.setItem('koduAI.enabled', newConfig.enabledAIs.kodu);
+      }
+      if (newConfig.clinePath) {
+        localStorage.setItem('clineAI.path', newConfig.clinePath);
+      }
+      if (newConfig.clineTaskFolder) {
+        localStorage.setItem('clineAI.taskFolder', newConfig.clineTaskFolder);
+      }
+      if (newConfig.enabledAIs?.cline !== undefined) {
+        localStorage.setItem('clineAI.enabled', newConfig.enabledAIs.cline);
+      }
+
+      setMonitoringConfig(updatedConfig);
+      setError('');
+
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Configuration updated successfully', updatedConfig);
+      return { success: true, config: updatedConfig };
+    } catch (err) {
+      const errorMsg = err.message;
       setError(errorMsg);
-      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg);
+      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error updating configuration', err);
       return { success: false, error: errorMsg };
     }
-
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected AI configuration', {
-      aiType,
-      basePath,
-      taskFolder
-    });
-
-    // Update monitoring config
-    const updatedConfig = {
-      basePath,
-      taskFolder,
-      projectPath: newConfig.projectPath
-    };
-    setMonitoringConfig(updatedConfig);
-    setError('');
-
-    return {
-      success: true,
-      config: updatedConfig,
-      aiType
-    };
   }, [monitoringConfig]);
 
   const isPathConfigured = useCallback((activeTab) => {
-    if (activeTab === 'kodu') {
-      const koduPath = localStorage.getItem('koduAI.path');
-      const koduTaskFolder = localStorage.getItem('koduAI.taskFolder');
-      return !!koduPath && !!koduTaskFolder;
-    } else if (activeTab === 'cline') {
-      const clinePath = localStorage.getItem('clineAI.path');
-      const clineTaskFolder = localStorage.getItem('clineAI.taskFolder');
-      return !!clinePath && !!clineTaskFolder;
-    } else if (activeTab === 'files') {
-      return !!monitoringConfig.projectPath;
+    switch (activeTab) {
+      case 'kodu':
+        return !!monitoringConfig.koduPath && !!monitoringConfig.koduTaskFolder;
+      case 'cline':
+        return !!monitoringConfig.clinePath && !!monitoringConfig.clineTaskFolder;
+      case 'files':
+        return !!monitoringConfig.projectPath;
+      default:
+        return true;
     }
-    return true;
-  }, [monitoringConfig.projectPath]);
+  }, [monitoringConfig]);
 
   return {
     monitoringConfig,

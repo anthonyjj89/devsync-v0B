@@ -7,7 +7,6 @@ import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { basename, join, normalize, sep } from 'path';
 import { debugLogger, DEBUG_LEVELS } from './src/utils/debug.js';
-import FileHistoryManager from './src/services/fileHistoryManager.js';
 import process from 'process';
 
 const COMPONENT = 'Server';
@@ -25,9 +24,6 @@ const io = new Server(server, {
         credentials: true
     }
 });
-
-// Initialize FileHistoryManager
-const fileHistoryManager = new FileHistoryManager();
 
 // Configure paths for both JSON files
 const CLAUDE_MESSAGES_PATH = 'claude_messages.json';
@@ -68,7 +64,7 @@ function joinPaths(...paths) {
 }
 
 // Helper function to extract messages from JSON file
-async function readMessagesFromFile(filePath) {
+async function readMessagesFromFile(filePath, aiType) {
     try {
         const content = await fs.promises.readFile(filePath, 'utf8');
         const data = JSON.parse(content);
@@ -76,158 +72,86 @@ async function readMessagesFromFile(filePath) {
         // Handle both array format and {messages: [...]} format
         const messages = Array.isArray(data) ? data : (data.messages || []);
         
+        // Add AI type to each message
+        const processedMessages = messages.map(msg => ({
+            ...msg,
+            aiType
+        }));
+        
         debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Read messages from file', {
             filePath,
-            messageCount: messages.length
+            aiType,
+            messageCount: processedMessages.length
         });
         
-        return messages;
+        return processedMessages;
     } catch (error) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading messages from file', {
             filePath,
+            aiType,
             error: error.message
         });
         return [];
     }
 }
 
-// New endpoint to get file history
-app.get('/api/file-history', async (req, res) => {
-    const requestId = `get-file-history-${Date.now()}`;
-    debugLogger.startTimer(requestId);
-    
-    const { projectPath: rawProjectPath, filePath: rawFilePath } = req.query;
-    if (!rawProjectPath || !rawFilePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
-        return res.json({ error: 'Both project path and file path are required' });
-    }
-
-    const projectPath = normalizePath(rawProjectPath);
-    const filePath = rawFilePath;
-    
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Getting file history', { 
-        projectPath,
-        filePath 
-    });
-
+// Helper function to get subfolders
+async function getSubfolders(path) {
     try {
-        const versions = await fileHistoryManager.getVersions(projectPath, filePath);
+        const entries = await fs.promises.readdir(path, { withFileTypes: true });
+        const folders = entries
+            .filter(entry => entry.isDirectory())
+            .map(entry => entry.name)
+            .sort();
         
-        const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File history retrieved successfully', {
-            filePath,
-            versionCount: versions.length,
-            durationMs: duration
+        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Retrieved subfolders', {
+            path,
+            folderCount: folders.length
         });
         
-        res.json({ success: true, history: versions });
+        return folders;
     } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting file history', {
-            filePath,
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting subfolders', {
+            path,
             error: error.message
         });
-        res.json({ success: false, error: error.message });
+        throw error;
     }
-});
+}
 
-// New endpoint to read project files with version support
-app.get('/api/read-project-file', async (req, res) => {
-    const requestId = `read-project-file-${Date.now()}`;
-    debugLogger.startTimer(requestId);
-    
-    const { projectPath: rawProjectPath, filePath: rawFilePath, version = 'latest' } = req.query;
-    if (!rawProjectPath || !rawFilePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
-        return res.json({ error: 'Both project path and file path are required' });
-    }
-
-    const projectPath = normalizePath(rawProjectPath);
-    const filePath = rawFilePath;
-    
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading project file', { 
-        projectPath,
-        filePath,
-        version
-    });
-
-    try {
-        // Set up file watcher if not already watching
-        if (!fileWatchers.has(filePath)) {
-            const watcher = await fileHistoryManager.watchFile(projectPath, filePath);
-            fileWatchers.set(filePath, watcher);
-        }
-
-        const content = await fileHistoryManager.getVersion(projectPath, filePath, version);
-        
-        const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
-            filePath,
-            version,
-            contentLength: content.length,
-            durationMs: duration
-        });
-        
-        res.json({ success: true, content });
-    } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading project file', {
-            filePath,
-            error: error.message
-        });
-        res.json({ success: false, error: error.message });
-    }
-});
-
-// New endpoint to get subfolders
+// Add get-subfolders endpoint
 app.get('/api/get-subfolders', async (req, res) => {
     const requestId = `get-subfolders-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const basePath = normalizePath(req.query.path);
-    if (!basePath) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No path provided for subfolders');
-        return res.json({ success: false, error: 'No path provided' });
+    const { path: rawPath } = req.query;
+    if (!rawPath) {
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing path parameter');
+        return res.json({ success: false, error: 'Path is required' });
     }
 
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Getting subfolders', { basePath });
+    const path = normalizePath(rawPath);
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Getting subfolders', { path });
 
     try {
-        // Check if base path exists and is accessible
-        await fs.promises.access(basePath);
+        const folders = await getSubfolders(path);
         
-        // Get all items in the directory
-        const items = await fs.promises.readdir(basePath, { withFileTypes: true });
-        
-        // Get both files and directories
-        const entries = items
-            .filter(item => !item.name.startsWith('.')) // Filter out hidden files/folders
-            .map(item => ({
-                name: item.name,
-                type: item.isDirectory() ? 'directory' : 'file'
-            }))
-            .sort((a, b) => {
-                // Sort directories first, then files, both alphabetically
-                if (a.type === b.type) {
-                    return a.name.localeCompare(b.name);
-                }
-                return a.type === 'directory' ? -1 : 1;
-            });
-
         const duration = debugLogger.endTimer(requestId, COMPONENT);
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Successfully retrieved entries', {
-            basePath,
-            entryCount: entries.length,
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Subfolders retrieved successfully', {
+            path,
+            folderCount: folders.length,
             durationMs: duration
         });
-
-        res.json({ success: true, entries });
+        
+        res.json({ success: true, entries: folders });
     } catch (error) {
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error getting entries', {
-            basePath,
+        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get subfolders', {
+            path,
             error: error.message
         });
         res.json({
             success: false,
-            error: `Failed to get entries: ${error.message}`
+            error: `Failed to get subfolders: ${error.message}`
         });
     }
 });
@@ -406,7 +330,7 @@ app.get('/api/claude-messages', async (req, res) => {
     const requestId = `fetch-claude-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const { basePath: rawBasePath, taskFolder } = req.query;
+    const { basePath: rawBasePath, taskFolder, aiType } = req.query;
     if (!rawBasePath || !taskFolder) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
         return res.json({ error: 'Both base path and task folder are required' });
@@ -414,18 +338,20 @@ app.get('/api/claude-messages', async (req, res) => {
 
     const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
     const filePath = joinPaths(basePath, CLAUDE_MESSAGES_PATH);
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading claude messages', { filePath, aiType });
 
     try {
-        const messages = await readMessagesFromFile(filePath);
+        const messages = await readMessagesFromFile(filePath, aiType);
         
         debugLogger.logFileOperation(COMPONENT, 'READ_CLAUDE', filePath, {
-            messageCount: messages.length
+            messageCount: messages.length,
+            aiType
         });
         
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Claude messages read successfully', {
             messageCount: messages.length,
+            aiType,
             durationMs: duration
         });
         
@@ -440,7 +366,7 @@ app.get('/api/api-messages', async (req, res) => {
     const requestId = `fetch-api-${Date.now()}`;
     debugLogger.startTimer(requestId);
     
-    const { basePath: rawBasePath, taskFolder } = req.query;
+    const { basePath: rawBasePath, taskFolder, aiType } = req.query;
     if (!rawBasePath || !taskFolder) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Missing required parameters');
         return res.json({ error: 'Both base path and task folder are required' });
@@ -448,18 +374,20 @@ app.get('/api/api-messages', async (req, res) => {
 
     const basePath = joinPaths(normalizePath(rawBasePath), taskFolder);
     const filePath = joinPaths(basePath, API_HISTORY_PATH);
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath });
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Reading API messages', { filePath, aiType });
 
     try {
-        const messages = await readMessagesFromFile(filePath);
+        const messages = await readMessagesFromFile(filePath, aiType);
         
         debugLogger.logFileOperation(COMPONENT, 'READ_API', filePath, {
-            messageCount: messages.length
+            messageCount: messages.length,
+            aiType
         });
         
         const duration = debugLogger.endTimer(requestId, COMPONENT);
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'API messages read successfully', {
             messageCount: messages.length,
+            aiType,
             durationMs: duration
         });
         

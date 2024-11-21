@@ -45,9 +45,21 @@ const FileActivity = ({ activity }) => {
     }
   };
 
+  const getAIBadgeColor = (aiType) => {
+    switch (aiType) {
+      case 'kodu':
+        return 'bg-blue-100 text-blue-800';
+      case 'cline':
+        return 'bg-purple-100 text-purple-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
   debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Rendering file activity', {
     type: activity.tool,
-    status: activity.status
+    status: activity.status,
+    aiType: activity.aiType
   });
 
   return (
@@ -55,8 +67,13 @@ const FileActivity = ({ activity }) => {
       <div className="flex items-start gap-2">
         <span className="text-xl">{getActivityIcon(activity.tool)}</span>
         <div className="flex-1">
-          <div className="text-sm font-medium">
-            {getActivityTitle(activity.tool)}
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-medium">
+              {getActivityTitle(activity.tool)}
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${getAIBadgeColor(activity.aiType)}`}>
+              {activity.aiType === 'kodu' ? 'Kodu AI' : 'Cline AI'}
+            </span>
           </div>
           {activity.path && (
             <div className="text-xs text-gray-600 break-all">
@@ -97,7 +114,8 @@ FileActivity.propTypes = {
     error: PropTypes.string,
     toolResult: PropTypes.string,
     approvalState: PropTypes.string,
-    toolStatus: PropTypes.string
+    toolStatus: PropTypes.string,
+    aiType: PropTypes.oneOf(['kodu', 'cline']).isRequired
   }).isRequired
 };
 

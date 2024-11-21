@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import FileActivity from './activity/FileActivity';
 
-const FileActivityTimeline = ({ messages, className = '' }) => {
+const COMPONENT = 'FileActivityTimeline';
+
+const FileActivityTimeline = ({ aiType, messages, className = '' }) => {
   const [activities, setActivities] = useState([]);
 
   useEffect(() => {
@@ -23,6 +27,10 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
             path: toolInfo.path || toolInfo.filePath,
             status: toolInfo.toolStatus || 'unknown',
             error: toolInfo.error,
+            toolResult: toolInfo.toolResult,
+            approvalState: toolInfo.approvalState,
+            toolStatus: toolInfo.toolStatus,
+            aiType // Include AI type in activity data
           };
           acc.push(activity);
         }
@@ -31,39 +39,36 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
       }, []).sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to match chat order
     };
 
-    setActivities(extractFileActivities(messages));
-  }, [messages]);
+    const processedActivities = extractFileActivities(messages);
+    setActivities(processedActivities);
 
-  const getActivityIcon = (type) => {
-    switch (type) {
-      case 'read_file':
-        return '📖';
-      case 'write_to_file':
-        return '✍️';
-      case 'list_files':
-        return '📁';
-      case 'saveClaudeMessages':
-        return '💾';
-      default:
-        return '📄';
-    }
-  };
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Activities processed', {
+      aiType,
+      messageCount: messages.length,
+      activityCount: processedActivities.length
+    });
+  }, [messages, aiType]);
 
-  const getActivityColor = (status) => {
-    switch (status) {
-      case 'success':
-        return 'border-green-500';
-      case 'error':
-        return 'border-red-500';
+  const getAIBadgeColor = (aiType) => {
+    switch (aiType) {
+      case 'kodu':
+        return 'bg-blue-100 text-blue-800';
+      case 'cline':
+        return 'bg-purple-100 text-purple-800';
       default:
-        return 'border-gray-300';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
   return (
     <div className={`w-80 bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
       <div className="p-4 bg-gray-50 border-b">
-        <h2 className="font-bold text-lg">File Activity</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-bold text-lg">File Activity</h2>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${getAIBadgeColor(aiType)}`}>
+            {aiType === 'kodu' ? 'Kodu AI' : 'Cline AI'}
+          </span>
+        </div>
       </div>
       <div className="h-full overflow-y-auto synchronized-scroll">
         <div className="p-4">
@@ -80,25 +85,8 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
                 <div className="w-24 text-center text-xs text-gray-500 px-2">
                   {new Date(activity.timestamp).toLocaleTimeString()}
                 </div>
-                <div className={`flex-1 pl-4 border-l-2 ${getActivityColor(activity.status)}`}>
-                  <div className="flex items-start gap-2">
-                    <span className="text-xl">{getActivityIcon(activity.type)}</span>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">
-                        {activity.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </div>
-                      {activity.path && (
-                        <div className="text-xs text-gray-600 break-all">
-                          {activity.path}
-                        </div>
-                      )}
-                      {activity.error && (
-                        <div className="text-xs text-red-500 mt-1">
-                          {activity.error}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <div className="flex-1">
+                  <FileActivity activity={activity} />
                 </div>
               </div>
             ))
@@ -110,6 +98,7 @@ const FileActivityTimeline = ({ messages, className = '' }) => {
 };
 
 FileActivityTimeline.propTypes = {
+  aiType: PropTypes.oneOf(['kodu', 'cline']).isRequired,
   messages: PropTypes.arrayOf(PropTypes.shape({
     timestamp: PropTypes.number,
     metadata: PropTypes.shape({
@@ -118,7 +107,9 @@ FileActivityTimeline.propTypes = {
         path: PropTypes.string,
         filePath: PropTypes.string,
         toolStatus: PropTypes.string,
-        error: PropTypes.string
+        error: PropTypes.string,
+        toolResult: PropTypes.string,
+        approvalState: PropTypes.string
       })
     })
   })).isRequired,

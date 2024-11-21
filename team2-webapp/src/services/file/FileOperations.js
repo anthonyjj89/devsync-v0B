@@ -57,7 +57,7 @@ class FileOperations {
     }
   }
 
-  async readFile(type) {
+  async readFile(type, aiType) {
     const basePath = this.pathValidation.getBasePath();
     const taskFolder = this.pathValidation.getTaskFolder();
 
@@ -73,20 +73,23 @@ class FileOperations {
     debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Reading ${type} messages`, {
       basePath,
       taskFolder,
-      endpoint
+      endpoint,
+      aiType
     });
 
     try {
       const encodedBasePath = encodeURIComponent(basePath);
       const encodedTaskFolder = encodeURIComponent(taskFolder);
+      const encodedAIType = encodeURIComponent(aiType);
       const response = await fetch(
-        `http://localhost:3002/api/${endpoint}?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
+        `http://localhost:3002/api/${endpoint}?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}&aiType=${encodedAIType}`,
         { credentials: 'include' }
       );
 
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `${type} messages response received`, {
         status: response.status,
-        ok: response.ok
+        ok: response.ok,
+        aiType
       });
 
       if (!response.ok) {
@@ -102,7 +105,8 @@ class FileOperations {
       // Process messages based on type
       let messages = Array.isArray(data) ? data : [];
       debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Raw ${type} messages received`, {
-        count: messages.length
+        count: messages.length,
+        aiType
       });
       
       // Filter out null/undefined messages but keep all valid objects
@@ -112,13 +116,15 @@ class FileOperations {
       debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${type} messages processed`, {
         originalCount: data.length,
         filteredCount: messages.length,
+        aiType,
         durationMs: duration
       });
 
       return messages;
     } catch (error) {
       debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, `Failed to read ${type} messages`, {
-        error: error.message
+        error: error.message,
+        aiType
       });
       return [];
     }
