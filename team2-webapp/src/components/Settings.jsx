@@ -6,7 +6,149 @@ import FileWatcher from '../services/fileWatcher';
 const COMPONENT = 'Settings';
 
 const Settings = ({ onSave }) => {
-  // ... [previous state and functions remain unchanged]
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [config, setConfig] = useState({
+    koduPath: localStorage.getItem('koduAI.path') || '',
+    koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
+    clinePath: localStorage.getItem('clineAI.path') || '',
+    clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
+    projectPath: localStorage.getItem('project.path') || '',
+    enabledAIs: {
+      kodu: localStorage.getItem('koduAI.enabled') !== 'false',
+      cline: localStorage.getItem('clineAI.enabled') !== 'false'
+    }
+  });
+  const [koduSubfolders, setKoduSubfolders] = useState([]);
+  const [clineSubfolders, setClineSubfolders] = useState([]);
+
+  useEffect(() => {
+    loadSubfolders();
+  }, [config.koduPath, config.clinePath]);
+
+  const loadSubfolders = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      if (config.koduPath) {
+        const koduWatcher = new FileWatcher();
+        const koduResult = await koduWatcher.getSubfolders();
+        if (koduResult.success && Array.isArray(koduResult.entries)) {
+          setKoduSubfolders(koduResult.entries);
+        } else {
+          throw new Error(koduResult.error || 'Failed to load Kodu subfolders');
+        }
+      }
+
+      if (config.clinePath) {
+        const clineWatcher = new FileWatcher();
+        const clineResult = await clineWatcher.getSubfolders();
+        if (clineResult.success && Array.isArray(clineResult.entries)) {
+          setClineSubfolders(clineResult.entries);
+        } else {
+          throw new Error(clineResult.error || 'Failed to load Cline subfolders');
+        }
+      }
+    } catch (err) {
+      setError(`Failed to load subfolders: ${err.message}`);
+      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error loading subfolders', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      // Validate paths
+      if (!config.projectPath) {
+        throw new Error('Project path is required');
+      }
+
+      if (config.enabledAIs.kodu && (!config.koduPath || !config.koduTaskFolder)) {
+        throw new Error('Kodu AI path and task folder are required when enabled');
+      }
+
+      if (config.enabledAIs.cline && (!config.clinePath || !config.clineTaskFolder)) {
+        throw new Error('Cline AI path and task folder are required when enabled');
+      }
+
+      // Save to localStorage
+      localStorage.setItem('project.path', config.projectPath);
+      localStorage.setItem('koduAI.path', config.koduPath);
+      localStorage.setItem('koduAI.taskFolder', config.koduTaskFolder);
+      localStorage.setItem('koduAI.enabled', config.enabledAIs.kodu);
+      localStorage.setItem('clineAI.path', config.clinePath);
+      localStorage.setItem('clineAI.taskFolder', config.clineTaskFolder);
+      localStorage.setItem('clineAI.enabled', config.enabledAIs.cline);
+
+      // Call parent save handler
+      await onSave(config);
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Settings saved successfully', config);
+    } catch (err) {
+      setError(err.message);
+      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error saving settings', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setConfig({
+      koduPath: localStorage.getItem('koduAI.path') || '',
+      koduTaskFolder: localStorage.getItem('koduAI.taskFolder') || '',
+      clinePath: localStorage.getItem('clineAI.path') || '',
+      clineTaskFolder: localStorage.getItem('clineAI.taskFolder') || '',
+      projectPath: localStorage.getItem('project.path') || '',
+      enabledAIs: {
+        kodu: localStorage.getItem('koduAI.enabled') !== 'false',
+        cline: localStorage.getItem('clineAI.enabled') !== 'false'
+      }
+    });
+    setError('');
+  };
+
+  const saveToFile = () => {
+    const configData = JSON.stringify(config, null, 2);
+    const blob = new Blob([configData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'devsync-settings.devsync';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const loadFromFile = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const loadedConfig = JSON.parse(e.target.result);
+        setConfig(loadedConfig);
+      } catch (err) {
+        setError('Failed to load settings file: Invalid format');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleAIToggle = (ai) => {
+    setConfig(prev => ({
+      ...prev,
+      enabledAIs: {
+        ...prev.enabledAIs,
+        [ai]: !prev.enabledAIs[ai]
+      }
+    }));
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full">
