@@ -1,5 +1,8 @@
-import { io } from 'socket.io-client';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import PathValidation from './path/PathValidation';
+import FileOperations from './file/FileOperations';
+import SocketManagement from './socket/SocketManagement';
+import FileHistory from './file/FileHistory';
 
 const COMPONENT = 'FileWatcher';
 
@@ -14,6 +17,16 @@ class FileWatcher {
         this.socket = null;
         this.retryCount = 0;
         this.maxRetries = 5;
+
+        // Initialize service modules
+        this.pathValidation = new PathValidation();
+        this.fileOperations = new FileOperations(this.pathValidation);
+        this.fileHistory = new FileHistory(this.pathValidation);
+        this.socketManagement = new SocketManagement(async (type) => {
+            if (type === 'fileUpdate') {
+                await this.checkAndUpdate();
+            }
+        });
         
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcher instance created', {
             maxRetries: this.maxRetries
@@ -21,9 +34,11 @@ class FileWatcher {
     }
 
     setBasePath(path, taskFolder = '') {
-        // Store paths separately
+        // Store paths separately and update path validation
         this.basePath = path;
         this.taskFolder = taskFolder;
+        this.pathValidation.setBasePath(path, taskFolder);
+        
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Paths set', {
             basePath: this.basePath,
             taskFolder: this.taskFolder
@@ -33,6 +48,8 @@ class FileWatcher {
 
     setProjectPath(path) {
         this.projectPath = path;
+        this.pathValidation.setProjectPath(path);
+        
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path set', {
             projectPath: this.projectPath
         });
@@ -40,422 +57,35 @@ class FileWatcher {
     }
 
     async getSubfolders(currentPath = '') {
-        if (!this.projectPath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No project path set for getting subfolders');
-            return { success: false, error: 'No project path set' };
-        }
-
-        const getFoldersId = `get-subfolders-${Date.now()}`;
-        debugLogger.startTimer(getFoldersId);
-
-        try {
-            const fullPath = currentPath 
-                ? `${this.projectPath}/${currentPath}` 
-                : this.projectPath;
-            const encodedPath = encodeURIComponent(fullPath);
-            const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
-                credentials: 'include'
-            });
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Subfolders response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to get subfolders');
-            }
-
-            const duration = debugLogger.endTimer(getFoldersId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Entries retrieved successfully', {
-                entryCount: data.entries?.length,
-                durationMs: duration
-            });
-
-            return data;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get entries', {
-                error: error.message
-            });
-            return { success: false, error: error.message };
-        }
+        return this.fileHistory.getSubfolders(currentPath);
     }
 
     async getFileHistory(filePath) {
-        if (!this.projectPath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'No project path set for getting file history');
-            return { success: false, error: 'No project path set' };
-        }
-
-        const getHistoryId = `get-history-${Date.now()}`;
-        debugLogger.startTimer(getHistoryId);
-
-        try {
-            const encodedProjectPath = encodeURIComponent(this.projectPath);
-            const encodedFilePath = encodeURIComponent(filePath);
-            const response = await fetch(
-                `http://localhost:3002/api/file-history?projectPath=${encodedProjectPath}&filePath=${encodedFilePath}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'File history response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to get file history');
-            }
-
-            const duration = debugLogger.endTimer(getHistoryId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File history retrieved successfully', {
-                filePath,
-                versionCount: data.history?.length,
-                durationMs: duration
-            });
-
-            return data;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to get file history', {
-                error: error.message
-            });
-            return { success: false, error: error.message };
-        }
+        return this.fileHistory.getFileHistory(filePath);
     }
 
     async readProjectFile(filePath, version = 'latest') {
-        if (!this.projectPath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path not set for file read');
-            return null;
-        }
-
-        const readId = `read-project-file-${Date.now()}`;
-        debugLogger.startTimer(readId);
-
-        try {
-            const encodedProjectPath = encodeURIComponent(this.projectPath);
-            const encodedFilePath = encodeURIComponent(filePath);
-            const encodedVersion = encodeURIComponent(version);
-            const response = await fetch(
-                `http://localhost:3002/api/read-project-file?projectPath=${encodedProjectPath}&filePath=${encodedFilePath}&version=${encodedVersion}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Project file response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            const duration = debugLogger.endTimer(readId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project file read successfully', {
-                filePath,
-                version,
-                durationMs: duration
-            });
-
-            return data.content;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Failed to read project file', {
-                error: error.message
-            });
-            throw error;
-        }
+        return this.fileOperations.readProjectFile(filePath, version);
     }
 
     async validatePath() {
-        if (!this.basePath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path not set');
-            throw new Error('Base path must be set');
-        }
-
-        const validationId = `validate-path-${Date.now()}`;
-        debugLogger.startTimer(validationId);
-        
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Validating path...', {
-            basePath: this.basePath,
-            taskFolder: this.taskFolder
-        });
-
-        try {
-            const encodedBasePath = encodeURIComponent(this.basePath);
-            const encodedTaskFolder = encodeURIComponent(this.taskFolder || '');
-            const response = await fetch(
-                `http://localhost:3002/api/validate-path?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Path validation response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Path validation failed');
-            }
-            
-            const duration = debugLogger.endTimer(validationId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Path validated successfully', {
-                basePath: this.basePath,
-                taskFolder: this.taskFolder,
-                durationMs: duration
-            });
-
-            return true;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Path validation failed', {
-                basePath: this.basePath,
-                taskFolder: this.taskFolder,
-                error: error.message
-            });
-            throw error;
-        }
+        return this.pathValidation.validatePath();
     }
 
     async validateProjectPath() {
-        if (!this.projectPath) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path not set');
-            throw new Error('Project path must be set');
-        }
-
-        const validationId = `validate-project-path-${Date.now()}`;
-        debugLogger.startTimer(validationId);
-
-        try {
-            const encodedPath = encodeURIComponent(this.projectPath);
-            const response = await fetch(
-                `http://localhost:3002/api/validate-project-path?path=${encodedPath}`,
-                { credentials: 'include' }
-            );
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.success) {
-                throw new Error(data.error || 'Project path validation failed');
-            }
-
-            const duration = debugLogger.endTimer(validationId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Project path validated successfully', {
-                projectPath: this.projectPath,
-                durationMs: duration
-            });
-
-            return true;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Project path validation failed', {
-                projectPath: this.projectPath,
-                error: error.message
-            });
-            throw error;
-        }
+        return this.pathValidation.validateProjectPath();
     }
 
     async readFile(type) {
-        if (!this.basePath || !this.taskFolder) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set for file read');
-            return null;
-        }
-
-        const readId = `read-${type}-${Date.now()}`;
-        debugLogger.startTimer(readId);
-
-        const endpoint = type === 'claude' ? 'claude-messages' : 'api-messages';
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Reading ${type} messages`, {
-            basePath: this.basePath,
-            taskFolder: this.taskFolder,
-            endpoint
-        });
-
-        try {
-            const encodedBasePath = encodeURIComponent(this.basePath);
-            const encodedTaskFolder = encodeURIComponent(this.taskFolder);
-            const response = await fetch(
-                `http://localhost:3002/api/${endpoint}?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `${type} messages response received`, {
-                status: response.status,
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            // Process messages based on type
-            let messages = Array.isArray(data) ? data : [];
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, `Raw ${type} messages received`, {
-                count: messages.length
-            });
-            
-            // Filter out null/undefined messages but keep all valid objects
-            messages = messages.filter(msg => msg !== null && typeof msg === 'object');
-            
-            const duration = debugLogger.endTimer(readId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `${type} messages processed`, {
-                originalCount: data.length,
-                filteredCount: messages.length,
-                durationMs: duration
-            });
-
-            return messages;
-        } catch (error) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, `Failed to read ${type} messages`, {
-                error: error.message
-            });
-            return [];
-        }
+        return this.fileOperations.readFile(type);
     }
 
     async checkLastUpdated() {
-        if (!this.basePath || !this.taskFolder) {
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Base path or task folder not set for timestamp check');
-            return null;
-        }
-
-        const checkId = `check-timestamp-${Date.now()}`;
-        debugLogger.startTimer(checkId);
-
-        try {
-            const encodedBasePath = encodeURIComponent(this.basePath);
-            const encodedTaskFolder = encodeURIComponent(this.taskFolder);
-            const response = await fetch(
-                `http://localhost:3002/api/last-updated?basePath=${encodedBasePath}&taskFolder=${encodedTaskFolder}`,
-                { credentials: 'include' }
-            );
-
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Last updated response received', {
-                status: response.status,
-                ok: response.ok
-            });
-
-            // Modified: Return current timestamp if file doesn't exist
-            if (!response.ok || response.status === 404) {
-                const currentTimestamp = new Date().toISOString();
-                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (no last_updated.txt)', {
-                    timestamp: currentTimestamp
-                });
-                return currentTimestamp;
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                const currentTimestamp = new Date().toISOString();
-                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (error reading last_updated.txt)', {
-                    timestamp: currentTimestamp,
-                    error: data.error
-                });
-                return currentTimestamp;
-            }
-            
-            const duration = debugLogger.endTimer(checkId, COMPONENT);
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Last updated timestamp retrieved', {
-                timestamp: data.timestamp,
-                durationMs: duration
-            });
-
-            return data.timestamp;
-        } catch (error) {
-            const currentTimestamp = new Date().toISOString();
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Using current timestamp (error)', {
-                timestamp: currentTimestamp,
-                error: error.message
-            });
-            return currentTimestamp;
-        }
+        return this.fileOperations.checkLastUpdated();
     }
 
     setupSocket() {
-        if (this.socket) {
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Disconnecting existing socket');
-            this.socket.disconnect();
-        }
-
-        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting up WebSocket connection');
-
-        this.socket = io('http://localhost:3002', {
-            withCredentials: true,
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            reconnectionAttempts: 5
-        });
-        
-        this.socket.on('connect', () => {
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Connected to WebSocket server', {
-                socketId: this.socket.id
-            });
-            this.retryCount = 0;
-            // Perform initial read when socket connects
-            this.checkAndUpdate();
-        });
-
-        this.socket.on('connect_error', (error) => {
-            this.retryCount++;
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Socket connection error', {
-                error: error.message,
-                retryCount: this.retryCount,
-                maxRetries: this.maxRetries
-            });
-            
-            if (this.retryCount >= this.maxRetries) {
-                debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Max reconnection attempts reached');
-                this.socket.disconnect();
-            }
-        });
-
-        this.socket.on('fileUpdated', async (data) => {
-            const updateId = `file-update-${Date.now()}`;
-            debugLogger.startTimer(updateId);
-
-            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File update received', data);
-            await this.checkAndUpdate();
-
-            debugLogger.endTimer(updateId, COMPONENT);
-        });
-
-        this.socket.on('disconnect', () => {
-            debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Disconnected from WebSocket server');
-        });
+        this.socketManagement.setupSocket();
     }
 
     async start() {
@@ -476,6 +106,10 @@ class FileWatcher {
         this.basePath = currentBasePath;
         this.taskFolder = currentTaskFolder;
         this.projectPath = currentProjectPath;
+        this.pathValidation.setBasePath(currentBasePath, currentTaskFolder);
+        if (currentProjectPath) {
+            this.pathValidation.setProjectPath(currentProjectPath);
+        }
 
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file monitoring', {
             basePath: this.basePath,
@@ -531,10 +165,10 @@ class FileWatcher {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
-        }
+        
+        this.socketManagement.disconnect();
+        this.fileHistory.clearCache();
+        
         this.lastTimestamp = null;
         this.retryCount = 0;
 

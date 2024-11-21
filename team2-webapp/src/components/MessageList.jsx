@@ -1,144 +1,34 @@
 import PropTypes from 'prop-types';
-import { useEffect, useRef, useState } from 'react';
-import MessageBubble from './MessageBubble';
+import { useEffect, useRef } from 'react';
+import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import TimelineItem from './activity/TimelineItem';
 import TaskFolderSelect from './TaskFolderSelect';
 import ChatSettings from './ChatSettings';
-import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
+import useTimelineData from '../hooks/useTimelineData';
+import useMessageSettings from '../hooks/useMessageSettings';
 
 const COMPONENT = 'MessageList';
 
-const FileActivity = ({ activity }) => {
-  const getActivityIcon = (type) => {
-    switch (type) {
-      case 'read_file':
-        return '📖';
-      case 'write_to_file':
-        return '✍️';
-      case 'list_files':
-        return '📁';
-      case 'saveClaudeMessages':
-        return '💾';
-      default:
-        return '📄';
-    }
-  };
-
-  const getActivityColor = (status) => {
-    switch (status) {
-      case 'success':
-        return 'border-green-500';
-      case 'error':
-        return 'border-red-500';
-      default:
-        return 'border-gray-300';
-    }
-  };
-
-  const getActivityTitle = (type) => {
-    switch (type) {
-      case 'read_file':
-        return 'Reading File';
-      case 'write_to_file':
-        return 'Writing File';
-      case 'list_files':
-        return 'Listing Files';
-      case 'saveClaudeMessages':
-        return 'Saving Messages';
-      default:
-        return 'File Activity';
-    }
-  };
-
-  return (
-    <div className={`pl-4 border-l-2 ${getActivityColor(activity.status)}`}>
-      <div className="flex items-start gap-2">
-        <span className="text-xl">{getActivityIcon(activity.tool)}</span>
-        <div className="flex-1">
-          <div className="text-sm font-medium">
-            {getActivityTitle(activity.tool)}
-          </div>
-          {activity.path && (
-            <div className="text-xs text-gray-600 break-all">
-              {activity.path}
-            </div>
-          )}
-          {activity.error && (
-            <div className="text-xs text-red-500 mt-1">
-              {activity.error}
-            </div>
-          )}
-          {activity.toolResult && (
-            <div className="text-xs text-gray-600 mt-1">
-              {activity.toolResult}
-            </div>
-          )}
-          {activity.approvalState && (
-            <div className="text-xs text-green-600 mt-1">
-              Status: {activity.approvalState}
-            </div>
-          )}
-          {activity.toolStatus && activity.toolStatus !== 'unknown' && (
-            <div className={`text-xs mt-1 ${activity.toolStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-              Status: {activity.toolStatus}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-FileActivity.propTypes = {
-  activity: PropTypes.shape({
-    tool: PropTypes.string.isRequired,
-    path: PropTypes.string,
-    status: PropTypes.string,
-    error: PropTypes.string,
-    toolResult: PropTypes.string,
-    approvalState: PropTypes.string,
-    toolStatus: PropTypes.string
-  }).isRequired
-};
-
-const TimelineItem = ({ item, onFileClick }) => {
-  return (
-    <div className="mb-6 last:mb-0 flex items-start">
-      {/* Left side - Chat message */}
-      <div className="flex-1">
-        {item.type === 'chat' && (
-          <MessageBubble {...item} showTimestamp={false} onFileClick={onFileClick} />
-        )}
-      </div>
-
-      {/* Middle - Timeline dot and timestamp */}
-      <div className="w-24 flex-shrink-0 flex flex-col items-center">
-        <div className="w-3 h-3 bg-blue-500 rounded-full relative z-10" />
-        <div className="mt-1 px-2 text-xs text-gray-500 bg-white relative z-10">
-          {new Date(item.timestamp).toLocaleTimeString()}
-        </div>
-      </div>
-
-      {/* Right side - File activity */}
-      <div className="flex-1">
-        {item.type === 'file' && (
-          <FileActivity activity={item} />
-        )}
-      </div>
-    </div>
-  );
-};
-
-TimelineItem.propTypes = {
-  item: PropTypes.shape({
-    type: PropTypes.oneOf(['chat', 'file']).isRequired,
-    timestamp: PropTypes.number.isRequired
-  }).isRequired,
-  onFileClick: PropTypes.func
-};
-
-const MessageList = ({ messages = [], advancedMode = false, className = '', onFileClick, taskFolder, onTaskFolderChange, onAdvancedModeChange }) => {
+const MessageList = ({
+  messages = [],
+  className = '',
+  onFileClick,
+  taskFolder,
+  onTaskFolderChange,
+  onAdvancedModeChange
+}) => {
   const messagesEndRef = useRef(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const { timelineItems, isEmpty } = useTimelineData(messages);
+  const {
+    showSettings,
+    advancedMode,
+    handleSettingsSave,
+    toggleSettings,
+    toggleAdvancedMode
+  } = useMessageSettings({
+    taskFolder,
+    onTaskFolderChange
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -152,45 +42,10 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
     });
   }, [messages, advancedMode]);
 
-  const handleSettingsSave = (config) => {
-    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Settings updated', config);
-    if (config.koduTaskFolder !== taskFolder) {
-      onTaskFolderChange(config.koduTaskFolder);
-    }
-  };
-
-  // Combine chat messages and file activities into a single chronological timeline
-  const timelineItems = messages.reduce((acc, message) => {
-    // Add chat message
-    acc.push({
-      ...message,
-      type: 'chat'
-    });
-
-    // Add file activity if present
-    const metadata = message.metadata || {};
-    const toolInfo = metadata.toolInfo || {};
-    if (
-      toolInfo.tool === 'read_file' ||
-      toolInfo.tool === 'write_to_file' ||
-      toolInfo.tool === 'list_files' ||
-      toolInfo.tool === 'saveClaudeMessages'
-    ) {
-      acc.push({
-        timestamp: message.timestamp,
-        type: 'file',
-        tool: toolInfo.tool,
-        path: toolInfo.path || toolInfo.filePath,
-        status: toolInfo.toolStatus || 'unknown',
-        error: toolInfo.error,
-        toolResult: toolInfo.toolResult,
-        approvalState: toolInfo.approvalState,
-        toolStatus: toolInfo.toolStatus
-      });
-    }
-
-    return acc;
-  }, []).sort((a, b) => a.timestamp - b.timestamp);
+  // Sync advanced mode with parent component
+  useEffect(() => {
+    onAdvancedModeChange(advancedMode);
+  }, [advancedMode, onAdvancedModeChange]);
 
   return (
     <div className={`bg-white shadow-lg rounded-lg overflow-hidden ${className}`}>
@@ -207,7 +62,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
                 <input
                   type="checkbox"
                   checked={advancedMode}
-                  onChange={(e) => onAdvancedModeChange(e.target.checked)}
+                  onChange={(e) => toggleAdvancedMode(e.target.checked)}
                   className="sr-only"
                 />
                 <div className={`block w-10 h-6 rounded-full transition-colors duration-200 ease-in-out ${advancedMode ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
@@ -215,7 +70,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
               </div>
             </label>
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={toggleSettings}
               className="p-2 text-gray-600 hover:text-gray-800 rounded-full hover:bg-gray-100"
               title="Settings"
             >
@@ -233,7 +88,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
           {/* Continuous vertical timeline line */}
           <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-blue-200 transform -translate-x-1/2" />
           
-          {timelineItems.length > 0 ? (
+          {!isEmpty ? (
             <div className="space-y-6 relative">
               {timelineItems.map((item, index) => (
                 <TimelineItem
@@ -254,7 +109,7 @@ const MessageList = ({ messages = [], advancedMode = false, className = '', onFi
 
       <ChatSettings
         isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
+        onClose={toggleSettings}
         onSave={handleSettingsSave}
       />
     </div>
@@ -271,7 +126,6 @@ MessageList.propTypes = {
     type: PropTypes.string,
     metadata: PropTypes.object
   })),
-  advancedMode: PropTypes.bool,
   className: PropTypes.string,
   onFileClick: PropTypes.func,
   taskFolder: PropTypes.string,
