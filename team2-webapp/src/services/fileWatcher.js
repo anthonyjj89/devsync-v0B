@@ -190,13 +190,28 @@ class FileWatcher {
             reconnection: true,
             reconnectionDelay: Math.min(1000 * Math.pow(2, this.retryCount), 10000), // Exponential backoff
             reconnectionDelayMax: 10000,
-            reconnectionAttempts: this.maxRetries
+            reconnectionAttempts: this.maxRetries,
+            timeout: 20000 // Increase connection timeout
         });
         
         this.socket.on('connect', () => {
             if (this.isDestroyed) {
                 this.socket.disconnect();
                 return;
+            }
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Socket connected', {
+                basePath: this.basePath,
+                taskFolder: this.taskFolder
+            });
+
+            // Subscribe to the path
+            if (this.basePath && this.taskFolder) {
+                const watchPath = `${this.basePath}/${this.taskFolder}`;
+                this.socket.emit('subscribe', watchPath);
+                debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Subscribed to path', {
+                    path: watchPath
+                });
             }
 
             this.retryCount = 0;
@@ -207,7 +222,12 @@ class FileWatcher {
             this.checkAndUpdate();
         });
 
-        this.socket.on('connect_error', () => {
+        this.socket.on('connect_error', (error) => {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Socket connection error', {
+                error: error.message,
+                retryCount: this.retryCount
+            });
+
             this.retryCount++;
             if (this.retryCount >= this.maxRetries) {
                 this.socket.disconnect();
@@ -218,8 +238,10 @@ class FileWatcher {
         });
 
         let updateTimeout = null;
-        this.socket.on('fileUpdated', () => {
+        this.socket.on('fileUpdated', (data) => {
             if (this.isDestroyed) return;
+
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File update received', data);
 
             // Debounce updates
             if (updateTimeout) {
@@ -232,7 +254,11 @@ class FileWatcher {
             }, 1000);
         });
 
-        this.socket.on('disconnect', () => {
+        this.socket.on('disconnect', (reason) => {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Socket disconnected', {
+                reason
+            });
+
             this.isConnected = false;
             if (this.onConnectionChange) {
                 this.onConnectionChange(false);
@@ -259,6 +285,11 @@ class FileWatcher {
         this.taskFolder = currentTaskFolder;
         this.projectPath = currentProjectPath;
 
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting file watcher', {
+            basePath: this.basePath,
+            taskFolder: this.taskFolder
+        });
+
         this.setupSocket();
         await this.checkAndUpdate();
 
@@ -269,6 +300,11 @@ class FileWatcher {
         if (!this.basePath || !this.taskFolder || this.isDestroyed) return;
 
         try {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Checking for updates', {
+                basePath: this.basePath,
+                taskFolder: this.taskFolder
+            });
+
             const [claudeMessages, apiMessages] = await Promise.all([
                 this.readFile('claude'),
                 this.readFile('api')
@@ -290,7 +326,14 @@ class FileWatcher {
     }
 
     stop() {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping file watcher');
+
         if (this.socket) {
+            // Unsubscribe from the path before disconnecting
+            if (this.basePath && this.taskFolder) {
+                const watchPath = `${this.basePath}/${this.taskFolder}`;
+                this.socket.emit('unsubscribe', watchPath);
+            }
             this.socket.disconnect();
             this.socket = null;
         }
@@ -308,6 +351,7 @@ class FileWatcher {
     }
 
     destroy() {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Destroying file watcher');
         this.isDestroyed = true;
         this.stop();
         this.messageCache.clear();

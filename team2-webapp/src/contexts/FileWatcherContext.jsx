@@ -22,20 +22,29 @@ export const FileWatcherProvider = ({ children }) => {
   const isMounted = useRef(true);
   const initializationInProgress = useRef(false);
 
+  // Cleanup on unmount
   useEffect(() => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider mounted');
+    
     return () => {
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'FileWatcherProvider unmounting');
       isMounted.current = false;
       // Cleanup all watchers
-      Object.values(fileWatchers).forEach(watcher => {
+      Object.entries(fileWatchers).forEach(([type, watcher]) => {
         if (watcher) {
+          debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, `Stopping watcher for ${type}`);
           watcher.destroy();
         }
       });
     };
-  }, []);
+  }, [fileWatchers]); // Added fileWatchers to dependency array
 
   const handleConnectionChange = useCallback((connected) => {
     if (!isMounted.current) return;
+
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Connection state changed', {
+      connected
+    });
 
     setIsMonitoring(connected);
     if (!connected) {
@@ -46,13 +55,18 @@ export const FileWatcherProvider = ({ children }) => {
   }, []);
 
   const createFileWatcher = useCallback((aiType) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Creating file watcher', { aiType });
+    
     return new FileWatcher(
       // onUpdate callback
       (type, data) => {
         if (!isMounted.current) return;
 
-        const updateId = `update-${aiType}-${type}-${Date.now()}`;
-        debugLogger.startTimer(updateId);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Received file update', {
+          type,
+          messageCount: data?.length,
+          aiType
+        });
 
         try {
           setLastUpdated(new Date());
@@ -62,7 +76,7 @@ export const FileWatcherProvider = ({ children }) => {
           // Only update messages if this is the active AI
           if (aiType === activeAI) {
             setMessages(processedData);
-            debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Messages updated', {
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Messages updated', {
               messageType: type,
               aiType,
               count: processedData.length
@@ -70,14 +84,10 @@ export const FileWatcherProvider = ({ children }) => {
           }
           
           setError('');
-
-          debugLogger.endTimer(updateId, COMPONENT);
         } catch (err) {
-          if (isMounted.current) {
-            const errorMsg = `Error processing ${aiType} messages: ${err.message}`;
-            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
-            setError(errorMsg);
-          }
+          const errorMsg = `Error processing ${aiType} messages: ${err.message}`;
+          debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
+          setError(errorMsg);
         }
       },
       // onConnectionChange callback
@@ -86,7 +96,16 @@ export const FileWatcherProvider = ({ children }) => {
   }, [activeAI, handleConnectionChange]);
 
   const initializeWatcher = useCallback(async (config, aiType) => {
-    if (initializationInProgress.current) return;
+    if (initializationInProgress.current) {
+      debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Initialization already in progress');
+      return;
+    }
+
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Initializing watcher', {
+      aiType,
+      config
+    });
+
     initializationInProgress.current = true;
 
     try {
@@ -94,24 +113,27 @@ export const FileWatcherProvider = ({ children }) => {
         throw new Error('No monitoring path configured');
       }
 
-      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Starting monitoring with config:', {
-        aiType,
-        config
-      });
-
       // Stop existing watcher if any
       if (fileWatchers[aiType]) {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping existing watcher', { aiType });
         fileWatchers[aiType].destroy();
       }
 
       // Create new watcher
       const watcher = createFileWatcher(aiType);
+      
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Setting paths', {
+        basePath: config.basePath,
+        taskFolder: config.taskFolder
+      });
+      
       await watcher.setBasePath(config.basePath, config.taskFolder).validatePath();
       
       if (config.projectPath) {
         watcher.setProjectPath(config.projectPath);
       }
       
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Starting watcher');
       await watcher.start();
 
       if (isMounted.current) {
@@ -125,17 +147,20 @@ export const FileWatcherProvider = ({ children }) => {
         setLastUpdated(new Date());
         setMessages([]); // Clear messages when switching AI
 
-        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Successfully started monitoring', {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Watcher initialized successfully', {
           aiType
         });
       } else {
-        // If component unmounted during initialization, cleanup the watcher
+        debugLogger.log(DEBUG_LEVELS.WARN, COMPONENT, 'Component unmounted during initialization');
         watcher.destroy();
       }
     } catch (err) {
+      const errorMsg = `Failed to start monitoring: ${err.message}`;
+      debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, {
+        error: err.message,
+        stack: err.stack
+      });
       if (isMounted.current) {
-        const errorMsg = `Failed to start monitoring: ${err.message}`;
-        debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, errorMsg, err);
         setError(errorMsg);
         setIsMonitoring(false);
       }
@@ -145,6 +170,8 @@ export const FileWatcherProvider = ({ children }) => {
   }, [fileWatchers, createFileWatcher]);
 
   const stopWatcher = useCallback((aiType) => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Stopping watcher', { aiType });
+    
     if (fileWatchers[aiType]) {
       fileWatchers[aiType].destroy();
       setFileWatchers(prev => ({
@@ -156,9 +183,6 @@ export const FileWatcherProvider = ({ children }) => {
         setError('');
         setIsMonitoring(false);
       }
-      debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'File watcher stopped', {
-        aiType
-      });
     }
   }, [fileWatchers, activeAI]);
 

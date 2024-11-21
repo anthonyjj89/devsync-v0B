@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
-import FileWatcher from '../services/fileWatcher';
 
 const COMPONENT = 'TaskFolderSelect';
 
@@ -17,36 +16,44 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
     const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Load recent folders
     useEffect(() => {
-        // Load recent folders from localStorage based on AI type
         const recent = JSON.parse(localStorage.getItem(`${aiType}AI.recentTaskFolders`) || '[]');
         setRecentFolders(recent);
     }, [aiType]);
 
-    useEffect(() => {
-        if (isOpen) {
-            fetchAvailableFolders();
-        }
-    }, [isOpen]);
-
-    const fetchAvailableFolders = async () => {
+    // Fetch available folders
+    const fetchAvailableFolders = useCallback(async () => {
         setIsLoading(true);
         setError(null);
 
         try {
-            const watcher = new FileWatcher(null);
             const basePath = localStorage.getItem(`${aiType}AI.path`) || AI_PATHS[aiType];
-            watcher.setBasePath(basePath);
+            const encodedPath = encodeURIComponent(basePath);
+            
+            debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Fetching folders', {
+                aiType,
+                basePath
+            });
 
-            const folders = await watcher.getSubfolders();
-            if (!folders.success) {
-                throw new Error(folders.error || 'Failed to get folders');
+            const response = await fetch(
+                `http://localhost:3002/api/get-subfolders?path=${encodedPath}`,
+                { credentials: 'include' }
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            setAvailableFolders(folders.entries || []);
+            const data = await response.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to get folders');
+            }
+
+            setAvailableFolders(data.entries || []);
             debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Folders fetched successfully', {
                 aiType,
-                folderCount: folders.entries?.length
+                folderCount: data.entries?.length
             });
         } catch (error) {
             setError('Failed to load folders: ' + error.message);
@@ -57,9 +64,16 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [aiType]);
 
-    const handleSelect = (folder) => {
+    // Fetch folders when dropdown opens
+    useEffect(() => {
+        if (isOpen) {
+            fetchAvailableFolders();
+        }
+    }, [isOpen, fetchAvailableFolders]);
+
+    const handleSelect = useCallback((folder) => {
         debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Selected task folder', {
             aiType,
             folder
@@ -73,7 +87,7 @@ function TaskFolderSelect({ aiType, currentFolder, onSelect }) {
         
         onSelect(folder);
         setIsOpen(false);
-    };
+    }, [aiType, onSelect]);
 
     return (
         <div className="relative">

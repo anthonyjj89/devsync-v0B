@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../utils/debug';
-import FileWatcher from '../services/fileWatcher';
 
 const COMPONENT = 'Settings';
 
@@ -25,50 +24,62 @@ const Settings = ({ onSave }) => {
   const [koduSubfolders, setKoduSubfolders] = useState([]);
   const [clineSubfolders, setClineSubfolders] = useState([]);
 
-  useEffect(() => {
-    loadSubfolders();
-  }, [config.koduPath, config.clinePath]);
-
-  const loadSubfolders = async () => {
+  const loadSubfolders = useCallback(async () => {
     setLoading(true);
     setError('');
     
     try {
       if (config.koduPath) {
-        const koduWatcher = new FileWatcher();
-        koduWatcher.setProjectPath(config.koduPath);
-        const koduResult = await koduWatcher.getSubfolders();
-        if (koduResult.success && Array.isArray(koduResult.entries)) {
-          // Filter for directories only and extract names
-          const folders = koduResult.entries
-            .filter(entry => entry.type === 'directory')
-            .map(entry => entry.name);
-          setKoduSubfolders(folders);
+        const encodedPath = encodeURIComponent(config.koduPath);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loading Kodu subfolders', {
+          path: config.koduPath
+        });
+
+        const koduResponse = await fetch(
+          `http://localhost:3002/api/get-subfolders?path=${encodedPath}`,
+          { credentials: 'include' }
+        );
+
+        if (!koduResponse.ok) {
+          throw new Error(`HTTP error! status: ${koduResponse.status}`);
+        }
+
+        const koduData = await koduResponse.json();
+        if (koduData.success && Array.isArray(koduData.entries)) {
+          setKoduSubfolders(koduData.entries);
           debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Loaded Kodu subfolders', {
             path: config.koduPath,
-            folderCount: folders.length
+            folderCount: koduData.entries.length
           });
         } else {
-          throw new Error(koduResult.error || 'Failed to load Kodu subfolders');
+          throw new Error(koduData.error || 'Failed to load Kodu subfolders');
         }
       }
 
       if (config.clinePath) {
-        const clineWatcher = new FileWatcher();
-        clineWatcher.setProjectPath(config.clinePath);
-        const clineResult = await clineWatcher.getSubfolders();
-        if (clineResult.success && Array.isArray(clineResult.entries)) {
-          // Filter for directories only and extract names
-          const folders = clineResult.entries
-            .filter(entry => entry.type === 'directory')
-            .map(entry => entry.name);
-          setClineSubfolders(folders);
+        const encodedPath = encodeURIComponent(config.clinePath);
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loading Cline subfolders', {
+          path: config.clinePath
+        });
+
+        const clineResponse = await fetch(
+          `http://localhost:3002/api/get-subfolders?path=${encodedPath}`,
+          { credentials: 'include' }
+        );
+
+        if (!clineResponse.ok) {
+          throw new Error(`HTTP error! status: ${clineResponse.status}`);
+        }
+
+        const clineData = await clineResponse.json();
+        if (clineData.success && Array.isArray(clineData.entries)) {
+          setClineSubfolders(clineData.entries);
           debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Loaded Cline subfolders', {
             path: config.clinePath,
-            folderCount: folders.length
+            folderCount: clineData.entries.length
           });
         } else {
-          throw new Error(clineResult.error || 'Failed to load Cline subfolders');
+          throw new Error(clineData.error || 'Failed to load Cline subfolders');
         }
       }
     } catch (err) {
@@ -77,7 +88,11 @@ const Settings = ({ onSave }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [config.koduPath, config.clinePath]);
+
+  useEffect(() => {
+    loadSubfolders();
+  }, [loadSubfolders]);
 
   const handleSave = async () => {
     setLoading(true);

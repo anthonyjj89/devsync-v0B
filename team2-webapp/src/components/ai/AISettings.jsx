@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { debugLogger, DEBUG_LEVELS } from '../../utils/debug';
 
@@ -19,15 +19,7 @@ const AISettings = ({ aiType, onSave }) => {
   });
   const [subfolders, setSubfolders] = useState([]);
 
-  useEffect(() => {
-    loadSubfolders();
-    // Check if we have a saved configuration
-    const savedPath = localStorage.getItem(`${aiType}AI.path`);
-    const savedFolder = localStorage.getItem(`${aiType}AI.taskFolder`);
-    setSaved(!!savedPath && !!savedFolder);
-  }, [config.basePath, aiType]);
-
-  const loadSubfolders = async () => {
+  const loadSubfolders = useCallback(async () => {
     if (!config.basePath) return;
 
     setLoading(true);
@@ -35,6 +27,11 @@ const AISettings = ({ aiType, onSave }) => {
     
     try {
       const encodedPath = encodeURIComponent(config.basePath);
+      debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Loading subfolders', {
+        path: config.basePath,
+        aiType
+      });
+
       const response = await fetch(`http://localhost:3002/api/get-subfolders?path=${encodedPath}`, {
         credentials: 'include'
       });
@@ -64,7 +61,15 @@ const AISettings = ({ aiType, onSave }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [config.basePath, aiType]);
+
+  useEffect(() => {
+    loadSubfolders();
+    // Check if we have a saved configuration
+    const savedPath = localStorage.getItem(`${aiType}AI.path`);
+    const savedFolder = localStorage.getItem(`${aiType}AI.taskFolder`);
+    setSaved(!!savedPath && !!savedFolder);
+  }, [loadSubfolders, aiType]);
 
   const handleSave = async () => {
     setLoading(true);

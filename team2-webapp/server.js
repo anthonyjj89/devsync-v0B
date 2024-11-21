@@ -20,7 +20,9 @@ const io = new Server(server, {
         origin: "http://localhost:5173",
         methods: ["GET", "POST"],
         credentials: true
-    }
+    },
+    pingTimeout: 60000, // Increase ping timeout
+    pingInterval: 25000  // Increase ping interval
 });
 
 const CLAUDE_MESSAGES_PATH = 'claude_messages.json';
@@ -40,12 +42,51 @@ function joinPaths(...paths) {
     return normalize(join(...paths)).split('/').join(sep);
 }
 
+function validateMessage(msg) {
+    if (!msg || typeof msg !== 'object') return false;
+    
+    // More lenient message validation
+    if (msg.type === 'say') {
+        return true; // Accept any 'say' message
+    }
+    
+    if (msg.type === 'ask') {
+        return true; // Accept any 'ask' message
+    }
+    
+    // Default message validation - accept if it has either text or content
+    return (typeof msg.text === 'string') || 
+           (Array.isArray(msg.content)) ||
+           (typeof msg.content === 'string');
+}
+
 async function readMessagesFromFile(filePath) {
     try {
         const content = await fs.promises.readFile(filePath, 'utf8');
-        const data = JSON.parse(content);
+        let data;
+        try {
+            data = JSON.parse(content);
+        } catch (parseError) {
+            debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error parsing JSON', {
+                filePath,
+                error: parseError.message,
+                content: content.substring(0, 100) // Log first 100 chars
+            });
+            return [];
+        }
+        
+        // Handle both array format and {messages: [...]} format
         const messages = Array.isArray(data) ? data : (data.messages || []);
-        const validMessages = messages.filter(msg => msg !== null && typeof msg === 'object');
+        
+        // Filter out invalid messages but keep all valid objects
+        const validMessages = messages.filter(msg => validateMessage(msg));
+        
+        debugLogger.log(DEBUG_LEVELS.DEBUG, COMPONENT, 'Read messages from file', {
+            filePath,
+            originalCount: messages.length,
+            validCount: validMessages.length
+        });
+        
         return validMessages;
     } catch (error) {
         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading messages from file', {
@@ -138,10 +179,10 @@ app.get('/api/validate-path', async (req, res) => {
                 persistent: true,
                 ignoreInitial: true,
                 usePolling: true,
-                interval: 5000, // Reduced polling frequency
+                interval: 1000, // Poll every second
                 awaitWriteFinish: {
-                    stabilityThreshold: 2000, // Increased debounce time
-                    pollInterval: 500
+                    stabilityThreshold: 500, // Wait 500ms after last change
+                    pollInterval: 100
                 }
             });
 
@@ -154,14 +195,22 @@ app.get('/api/validate-path', async (req, res) => {
                 
                 changeTimeout = setTimeout(async () => {
                     try {
+                        // Read messages to validate the file before notifying clients
+                        const messages = await readMessagesFromFile(filePath);
+                        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'File changed', {
+                            file: basename(filePath),
+                            messageCount: messages.length
+                        });
+                        
                         io.emit('fileUpdated', { 
                             file: basename(filePath),
-                            path: basePath
+                            path: basePath,
+                            messageCount: messages.length
                         });
                     } catch (err) {
                         debugLogger.log(DEBUG_LEVELS.ERROR, COMPONENT, 'Error reading changed file', err);
                     }
-                }, 1000); // 1 second debounce
+                }, 500); // 500ms debounce
             });
 
             activeWatchers.set(basePath, watcher);
@@ -229,10 +278,35 @@ app.get('/api/last-updated', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    socket.on('disconnect', () => {});
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Client connected', {
+        id: socket.id
+    });
+
+    socket.on('subscribe', (path) => {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Client subscribed to path', {
+            id: socket.id,
+            path
+        });
+        socket.join(path);
+    });
+
+    socket.on('unsubscribe', (path) => {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Client unsubscribed from path', {
+            id: socket.id,
+            path
+        });
+        socket.leave(path);
+    });
+
+    socket.on('disconnect', () => {
+        debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Client disconnected', {
+            id: socket.id
+        });
+    });
 });
 
 process.on('SIGINT', () => {
+    debugLogger.log(DEBUG_LEVELS.INFO, COMPONENT, 'Shutting down server');
     for (const watcher of activeWatchers.values()) {
         watcher.close();
     }
